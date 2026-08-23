@@ -30,6 +30,39 @@ def test_json_result_uses_stdout_only(tmp_path: Path) -> None:
     assert json.loads(process.stdout)["diagnostics"][0]["code"] == "SCG1001"
 
 
+def test_json_init_never_prompts_even_when_stdin_is_a_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    skill = tmp_path / "skills" / "review"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("# Review\n", encoding="utf-8")
+
+    class TerminalInput(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    monkeypatch.setattr(sys, "stdin", TerminalInput())
+    stdout = io.StringIO()
+    assert (
+        main(
+            [
+                "--output=json",
+                "init",
+                "--repo",
+                str(tmp_path),
+                "--skills-path",
+                "skills",
+                "--starter-evals",
+                "review",
+            ],
+            stdout=stdout,
+            stderr=io.StringIO(),
+        )
+        == 0
+    )
+    assert json.loads(stdout.getvalue())["data"]["skills_path"] == "skills"
+
+
 @pytest.mark.parametrize("command", ["init", "doctor", "eval"])
 def test_default_dispatch_calls_each_handler(
     command: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

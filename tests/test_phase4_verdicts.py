@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import shlex
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
@@ -14,6 +18,7 @@ from skillroll.artifacts import store as store_module
 from skillroll.artifacts.records import (
     checks_bytes,
     execution_bytes,
+    experiment_report_bytes,
     final_report_bytes,
     judge_bytes,
     verdict_bytes,
@@ -30,7 +35,7 @@ from skillroll.checks import (
 )
 from skillroll.commands import evaluate
 from skillroll.commands import validate as validate_command
-from skillroll.diagnostics import SourceLocation
+from skillroll.diagnostics import CommandResult, SourceLocation
 from skillroll.evals import _assertion_data, _parse_assertions, parse_eval_case
 from skillroll.inference.profile import (
     InferenceFailure,
@@ -50,6 +55,7 @@ from skillroll.judge import (
     MAX_JUDGE_BYTES,
     JudgeResult,
     _parse,
+    criteria_items,
     estimate_judge_output_tokens,
     judge,
     judge_request,
@@ -77,6 +83,13 @@ from skillroll.runtime.execution import (
 )
 from skillroll.verdicts import CaseResult, aggregate, case_outcome
 from skillroll.world.session import WorldEvent
+
+
+def _python_shell_command(source: str) -> str:
+    arguments = [sys.executable, "-c", source]
+    return (
+        subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
+    )
 
 
 class Transport:
@@ -716,6 +729,7 @@ def test_judge_reports_length_finish_reason_before_parsing(tmp_path: Path) -> No
 
 
 def test_judge_output_estimate_scales_with_case_complexity() -> None:
+    assert criteria_items("- first\n* second") == ("first", "second")
     assert estimate_judge_output_tokens(3, 16 * 1024) == 4096
     assert estimate_judge_output_tokens(4, 16 * 1024) == 8192
     assert estimate_judge_output_tokens(3, 64 * 1024 + 1) == 16384
@@ -805,6 +819,40 @@ def test_judge_handles_transport_failure_and_evidence_limit(tmp_path: Path) -> N
         profile(), case, ExecutionResult("x" * (MAX_JUDGE_BYTES + 1), 1, (), ()), ()
     )
     assert request is None and received is not None and "above" in received.summary
+    result, received = asyncio.run(
+        judge(
+            profile(),
+            Transport(ChatResponse("unused", (), None, None)),
+            case,
+            ExecutionResult("x" * (MAX_JUDGE_BYTES + 1), 1, (), ()),
+            (),
+        )
+    )
+    assert result is None and received is not None and "above" in received.summary
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"verdict":"FAIL","rationale":"x","criteria":{},"unmet_criteria":["one"]}',
+        '{"verdict":"FAIL","rationale":"x","criteria":[{"extra":1}],'
+        '"unmet_criteria":["one"]}',
+        '{"verdict":"FAIL","rationale":"x","criteria":['
+        '{"status":"not_met","evidence":"' + "x" * 4097 + '"}],'
+        '"unmet_criteria":["one"]}',
+        '{"verdict":"PASS","rationale":"x","criteria":['
+        '{"status":"not_met","evidence":"x"}],"unmet_criteria":[]}',
+        '{"verdict":"FAIL","rationale":"x","criteria":['
+        '{"status":"met","evidence":"x"}],"unmet_criteria":["one"]}',
+        '{"verdict":"PASS","rationale":"x","criteria":['
+        '{"status":"met","evidence":"x"}],"unmet_criteria":["one"]}',
+    ],
+)
+def test_judge_rejects_each_structured_criterion_integrity_failure(
+    content: str,
+) -> None:
+    parsed, failure = _parse(content, False, ("one",))
+    assert parsed is None and failure is not None
 
 
 def test_judge_handles_missing_skill_and_unexpected_transport_error(
@@ -900,7 +948,10 @@ def test_check_environment_removes_only_configured_key_and_real_runner(
     tmp_path: Path,
 ) -> None:
     check = DeclaredCheck(
-        "works", "printf ok", (PurePosixPath("scripts/test.py"),), SourceLocation()
+        "works",
+        _python_shell_command("import sys; sys.stdout.write('ok')"),
+        (PurePosixPath("scripts/test.py"),),
+        SourceLocation(),
     )
     case = case_at(tmp_path, check)
     config = SkillRollConfig(
@@ -924,7 +975,12 @@ def test_check_environment_removes_only_configured_key_and_real_runner(
 
 def test_runner_captures_failure_and_timeout(tmp_path: Path) -> None:
     failed_check = DeclaredCheck(
-        "fails", "printf nope >&2; exit 4", (), SourceLocation()
+        "fails",
+        _python_shell_command(
+            "import sys; sys.stderr.write('nope'); raise SystemExit(4)"
+        ),
+        (),
+        SourceLocation(),
     )
     failed_request = CheckRequest(
         case_at(tmp_path, failed_check), failed_check, "validate", tmp_path, None
@@ -933,7 +989,12 @@ def test_runner_captures_failure_and_timeout(tmp_path: Path) -> None:
     assert (
         failed.outcome == "FAIL" and failed.exit_code == 4 and failed.stderr == "nope"
     )
-    slow_check = DeclaredCheck("slow", "sleep 1", (), SourceLocation())
+    slow_check = DeclaredCheck(
+        "slow",
+        _python_shell_command("import time; time.sleep(1)"),
+        (),
+        SourceLocation(),
+    )
     root = tmp_path / "slow"
     timed = asyncio.run(
         HostCheckRunner(timeout_seconds=0).run(
@@ -1273,6 +1334,11 @@ def test_final_report_handles_missing_judge_assertions_checks_and_failure() -> N
             "verdict": "PASS",
             "rationale": "The result meets the criteria.",
             "unmet_criteria": [],
+            "criteria": (
+                "ignore malformed assessment",
+                {"criterion": "one", "status": "met", "evidence": ""},
+                {"criterion": "two", "status": "met", "evidence": "observed"},
+            ),
         },
         (
             {
@@ -1313,6 +1379,36 @@ def test_final_report_handles_missing_judge_assertions_checks_and_failure() -> N
     assert "`Read`" in detailed and "literal was present" in detailed
     assert "Profile purpose: Low-cost release signal." in detailed
     assert "omitted 1 earlier actions" in detailed
+
+
+def test_experiment_report_handles_malformed_and_complete_optional_sections() -> None:
+    minimal = experiment_report_bytes(
+        {
+            "interpretation": "invalid",
+            "paired_comparisons": "invalid",
+            "skill_runs": "invalid",
+            "skill_control_runs": {"PASS": 0},
+        }
+    ).decode()
+    assert "No interpretation was recorded" in minimal
+    assert "skill_control_runs: PASS=0" in minimal
+
+    detailed = experiment_report_bytes(
+        {
+            "interpretation": {"status": "mixed", "explanation": "review"},
+            "paired_comparisons": [
+                "invalid",
+                {
+                    "sample": 1,
+                    "skill_run": {"outcome": "PASS", "artifact_directory": "a"},
+                    "skill_control_run": "invalid",
+                    "control_interpretation": "useful",
+                },
+            ],
+            "skill_runs": {"PASS": 1},
+        }
+    ).decode()
+    assert "| 1 | PASS | not run | useful | `a` |" in detailed
 
 
 def test_fallback_append_writes_check_logs_and_rejects_unsafe_log_folder(
@@ -1478,6 +1574,228 @@ def test_authoring_experiment_pairs_skill_and_omission_runs(tmp_path: Path) -> N
     control_run = json.loads((control_dir / "run.json").read_text())
     assert control_run["skill_instructions_available"] is False
     assert "skills/review/SKILL.md" not in (control_dir / "inputs.json").read_text()
+
+
+def test_experiment_interpretations_cover_every_authoring_outcome(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def result(name: str, outcome: str) -> CaseResult:
+        return CaseResult(
+            case_at(tmp_path / name),
+            outcome,  # type: ignore[arg-type]
+            None,
+            None,
+            (),
+            (),
+            None,
+            PurePosixPath(f".skillroll/runs/{name}"),
+        )
+
+    passed = result("passed", "PASS")
+    failed = result("failed", "FAIL")
+    errored = result("errored", "ERROR")
+    unusual = result("unusual", "OTHER")
+
+    assert "without" in evaluate._control_interpretation(passed, None)
+    assert "inconclusive" in evaluate._control_interpretation(errored, failed)
+    assert "distinguishes" in evaluate._control_interpretation(passed, failed)
+    assert "passed without" in evaluate._control_interpretation(failed, passed)
+    assert "does not yet" in evaluate._control_interpretation(failed, failed)
+    assert "clear comparison" in evaluate._control_interpretation(passed, unusual)
+
+    pair = evaluate.ExperimentPair(1, passed, failed)
+    assert (
+        evaluate._experiment_interpretation((pair,), False)["status"] == "sampling_only"
+    )
+    assert (
+        evaluate._experiment_interpretation(
+            (evaluate.ExperimentPair(1, errored, failed),), True
+        )["status"]
+        == "technically_inconclusive"
+    )
+    assert (
+        evaluate._experiment_interpretation(
+            (evaluate.ExperimentPair(1, failed, failed),), True
+        )["status"]
+        == "skill_not_ready"
+    )
+    assert evaluate._experiment_interpretation((pair,), True)["status"] == (
+        "consistent_discrimination"
+    )
+    assert (
+        evaluate._experiment_interpretation(
+            (pair, evaluate.ExperimentPair(2, passed, passed)), True
+        )["status"]
+        == "mixed_discrimination"
+    )
+    assert (
+        evaluate._experiment_interpretation(
+            (evaluate.ExperimentPair(1, passed, passed),), True
+        )["status"]
+        == "no_observed_discrimination"
+    )
+
+    monkeypatch.setattr(
+        evaluate, "_usage_records", lambda *_, **__: {"calls": "not-a-list"}
+    )
+    assert evaluate._experiment_usage((passed,), "model") == {
+        "status": "unavailable",
+        "calls": [],
+    }
+
+
+def test_experiment_returns_technical_failures_and_closes_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings("https://example.test/v1", "tiny", "KEY"),
+        tmp_path / "skillroll.toml",
+    )
+    expected = InferenceFailure(InferenceFailureKind.SERVICE_FAILURE, "broken")
+
+    result = asyncio.run(
+        evaluate.evaluate_experiment(
+            config,
+            (case,),
+            environment={},
+            run_commands=False,
+            samples=1,
+            with_skill_control=False,
+        )
+    )
+    assert isinstance(result, InferenceFailure)
+
+    transport = Transport(ChatResponse("unused", (), None, None))
+
+    async def resolved(*_: object, **__: object) -> object:
+        return profile(), transport
+
+    async def failed(*_: object, **__: object) -> InferenceFailure:
+        return expected
+
+    monkeypatch.setattr(evaluate, "_resolve_profile", resolved)
+    monkeypatch.setattr(evaluate, "evaluate_repository", failed)
+    result = asyncio.run(
+        evaluate.evaluate_experiment(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            samples=1,
+            with_skill_control=False,
+        )
+    )
+    assert result == expected and transport.closed
+
+
+def test_experiment_handles_control_and_parent_evidence_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings("https://example.test/v1", "tiny", "KEY"),
+        tmp_path / "skillroll.toml",
+    )
+    selected = CaseResult(case, "PASS", None, None, (), (), None, None)
+    expected = InferenceFailure(InferenceFailureKind.SERVICE_FAILURE, "control failed")
+    transport = Transport(ChatResponse("unused", (), None, None))
+
+    async def resolved(*_: object, **__: object) -> object:
+        return profile(), transport
+
+    responses: list[object] = [(selected,), expected]
+
+    async def repository(*_: object, **__: object) -> object:
+        return responses.pop(0)
+
+    monkeypatch.setattr(evaluate, "_resolve_profile", resolved)
+    monkeypatch.setattr(evaluate, "evaluate_repository", repository)
+    result = asyncio.run(
+        evaluate.evaluate_experiment(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            samples=1,
+            with_skill_control=True,
+        )
+    )
+    assert result == expected and transport.closed
+
+    transport = Transport(ChatResponse("unused", (), None, None))
+
+    async def selected_only(*_: object, **__: object) -> object:
+        return (selected,)
+
+    class BrokenStore:
+        def create_experiment(self) -> tuple[str, Path]:
+            directory = tmp_path / ".skillroll" / "experiments" / "experiment-id"
+            directory.mkdir(parents=True)
+            return "experiment-id", directory
+
+        def write_experiment(self, *_: object) -> None:
+            raise ArtifactError("could not save parent")
+
+    monkeypatch.setattr(evaluate, "evaluate_repository", selected_only)
+    result = asyncio.run(
+        evaluate.evaluate_experiment(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            samples=1,
+            with_skill_control=False,
+            store_factory=lambda *_: BrokenStore(),  # type: ignore[arg-type]
+        )
+    )
+    assert isinstance(result, InferenceFailure)
+    assert result.stage == "evidence_writing"
+
+
+def test_run_validates_sample_bounds_and_reports_experiment_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert evaluate.run(samples=0).outcome is Outcome.ERROR
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        None,
+        tmp_path / "skillroll.toml",
+    )
+    selected = CaseResult(case, "PASS", None, None, (), (), None, None)
+    report = type("Report", (), {"config": config, "cases": (case,)})()
+    monkeypatch.setattr(evaluate, "validate_repository", lambda *_: report)
+    monkeypatch.setattr(
+        evaluate,
+        "command_result",
+        lambda *_: CommandResult(Outcome.PASS, "valid"),
+    )
+
+    async def experiment(*_: object, **__: object) -> evaluate.ExperimentResult:
+        return evaluate.ExperimentResult(
+            (evaluate.ExperimentPair(1, selected, None),),
+            PurePosixPath(".skillroll/experiments/experiment-id"),
+            {"interpretation": {"status": "sampling_only"}},
+        )
+
+    monkeypatch.setattr(evaluate, "evaluate_experiment", experiment)
+    result = evaluate.run(repo=str(tmp_path), samples=2, environment={})
+    assert result.outcome is Outcome.PASS
+    assert result.data["experiment_artifact_directory"] == (
+        ".skillroll/experiments/experiment-id"
+    )
 
 
 def test_evaluate_records_judge_failure_as_a_semantic_stage_error(

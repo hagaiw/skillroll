@@ -6,6 +6,7 @@ import argparse
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from io import StringIO
 from typing import Never, TextIO
 
 from skillroll import __version__
@@ -274,7 +275,7 @@ def main(
                         yes=namespace.yes,
                         github_workflow=namespace.github_workflow,
                         action_ref=namespace.action_ref,
-                        input_stream=sys.stdin,
+                        input_stream=(sys.stdin if output == "text" else StringIO()),
                         output_stream=out,
                     )
                 elif namespace.command == "doctor" and commands is None:

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from skillroll.artifacts import store as store_module
 from skillroll.artifacts.hashes import classify_bundle_path, hash_bytes, hash_file
 from skillroll.artifacts.records import (
     RunFacts,
@@ -601,33 +602,36 @@ def test_store_rejects_unsafe_subfolders_and_write_errors(
     (tmp_path / ".skillroll" / "runs").unlink()
     store = ArtifactStore(tmp_path, SecretRedactor(profile().api_key), lambda: "id")
     _, directory, _ = store.create()
-    directory_fd = store._open_run_directory(directory)
-    with pytest.raises(ArtifactError, match="atomically write"):
-        monkeypatch.setattr(
-            "skillroll.artifacts.store.os.replace",
-            lambda *_, **__: (_ for _ in ()).throw(OSError()),
-        )
-        monkeypatch.setattr(
-            "skillroll.artifacts.store.os.unlink",
-            lambda *_, **__: (_ for _ in ()).throw(OSError()),
-        )
-        store._write(directory_fd, "x", b"ok")
-    os.close(directory_fd)
-    assert list(directory.glob(".x.*.tmp"))
-    monkeypatch.undo()
-    for temporary in directory.glob(".x.*.tmp"):
-        temporary.unlink()
-    directory_fd = store._open_run_directory(directory)
-    collision = directory / ".collision.fixed.tmp"
-    collision.write_bytes(b"already here")
+    if store_module._descriptor_safety_available():
+        directory_fd = store._open_run_directory(directory)
+        with pytest.raises(ArtifactError, match="atomically write"):
+            monkeypatch.setattr(
+                "skillroll.artifacts.store.os.replace",
+                lambda *_, **__: (_ for _ in ()).throw(OSError()),
+            )
+            monkeypatch.setattr(
+                "skillroll.artifacts.store.os.unlink",
+                lambda *_, **__: (_ for _ in ()).throw(OSError()),
+            )
+            store._write(directory_fd, "x", b"ok")
+        os.close(directory_fd)
+        assert list(directory.glob(".x.*.tmp"))
+        monkeypatch.undo()
+        for temporary in directory.glob(".x.*.tmp"):
+            temporary.unlink()
+        directory_fd = store._open_run_directory(directory)
+        collision = directory / ".collision.fixed.tmp"
+        collision.write_bytes(b"already here")
 
-    class FixedToken:
-        hex = "fixed"
+        class FixedToken:
+            hex = "fixed"
 
-    monkeypatch.setattr("skillroll.artifacts.store.uuid.uuid4", lambda: FixedToken())
-    with pytest.raises(ArtifactError, match="atomically write"):
-        store._write(directory_fd, "collision", b"ok")
-    os.close(directory_fd)
+        monkeypatch.setattr(
+            "skillroll.artifacts.store.uuid.uuid4", lambda: FixedToken()
+        )
+        with pytest.raises(ArtifactError, match="atomically write"):
+            store._write(directory_fd, "collision", b"ok")
+        os.close(directory_fd)
     assert (
         ArtifactStore(tmp_path, SecretRedactor(profile().api_key))._safe(
             b"test-secret%2Fone"
@@ -641,6 +645,90 @@ def test_store_exhausts_collision_ids(tmp_path: Path) -> None:
     store.create()
     with pytest.raises(ArtifactError, match="unique"):
         store.create()
+
+
+def test_experiment_store_contract_and_failure_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unsafe = tmp_path / "unsafe"
+    unsafe.write_text("x", encoding="utf-8")
+    with pytest.raises(ArtifactError, match="selected repository folder is unsafe"):
+        ArtifactStore(unsafe, SecretRedactor(profile().api_key)).create_experiment()
+
+    base_file_root = tmp_path / "base-file"
+    base_file_root.mkdir()
+    (base_file_root / ".skillroll").write_text("x", encoding="utf-8")
+    with pytest.raises(ArtifactError, match="not an ordinary folder"):
+        ArtifactStore(
+            base_file_root, SecretRedactor(profile().api_key)
+        ).create_experiment()
+
+    experiments_file_root = tmp_path / "experiments-file"
+    (experiments_file_root / ".skillroll").mkdir(parents=True)
+    (experiments_file_root / ".skillroll" / "experiments").write_text(
+        "x", encoding="utf-8"
+    )
+    with pytest.raises(ArtifactError, match="experiments is not an ordinary folder"):
+        ArtifactStore(
+            experiments_file_root, SecretRedactor(profile().api_key)
+        ).create_experiment()
+
+    store = ArtifactStore(tmp_path, SecretRedactor(profile().api_key), lambda: "same")
+    _, first = store.create_experiment()
+    values = iter(("same", "next"))
+    collision_store = ArtifactStore(
+        tmp_path, SecretRedactor(profile().api_key), lambda: next(values)
+    )
+    experiment_id, directory = collision_store.create_experiment()
+    assert experiment_id == "experiment-next"
+    with pytest.raises(ArtifactError, match="unique"):
+        store.create_experiment()
+
+    with pytest.raises(ArtifactError, match="outside"):
+        collision_store.write_experiment(tmp_path, b"{}", b"report")
+    missing = directory.with_name("experiment-missing")
+    with pytest.raises(ArtifactError, match="safely reopen"):
+        collision_store.write_experiment(missing, b"{}", b"report")
+    first.rmdir()
+    first.write_text("x", encoding="utf-8")
+    with pytest.raises(ArtifactError, match="not an ordinary folder"):
+        store.write_experiment(first, b"{}", b"report")
+
+    original_mkdir = Path.mkdir
+
+    def broken_mkdir(path: Path, *args: object, **kwargs: object) -> None:
+        if path.name == "experiments":
+            raise OSError("broken")
+        original_mkdir(path, *args, **kwargs)
+
+    broken_root = tmp_path / "broken-root"
+    broken_root.mkdir()
+    monkeypatch.setattr(Path, "mkdir", broken_mkdir)
+    with pytest.raises(ArtifactError, match="could not create"):
+        ArtifactStore(
+            broken_root, SecretRedactor(profile().api_key)
+        ).create_experiment()
+    monkeypatch.undo()
+
+    original_is_file = Path.is_file
+
+    def changed_file(path: Path) -> bool:
+        if path.name.startswith(".result.json"):
+            return False
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", changed_file)
+    with pytest.raises(ArtifactError, match="changed experiment evidence"):
+        collision_store.write_experiment(directory, b"{}", b"report")
+    monkeypatch.undo()
+
+    monkeypatch.setattr(
+        "skillroll.artifacts.store.os.replace",
+        lambda *_, **__: (_ for _ in ()).throw(OSError("broken")),
+    )
+    with pytest.raises(ArtifactError, match="could not atomically write"):
+        collision_store.write_experiment(directory, b"{}", b"report")
+    assert not list(directory.glob(".*.tmp"))
 
 
 def test_store_rejects_directory_swap_and_temp_symlink(
@@ -687,7 +775,11 @@ def test_store_rejects_directory_swap_and_temp_symlink(
     monkeypatch.setattr(
         "skillroll.artifacts.store.uuid.uuid4", lambda: Token(next(calls))
     )
-    store.write(directory, facts_for(run_id, started, manifest), manifest, ())
+    if os.name == "nt":
+        with pytest.raises(ArtifactError, match="changed temporary evidence file"):
+            store.write(directory, facts_for(run_id, started, manifest), manifest, ())
+    else:
+        store.write(directory, facts_for(run_id, started, manifest), manifest, ())
     assert not (outside / "escaped").exists()
     assert (directory / "inputs.json").is_file()
 
@@ -741,7 +833,11 @@ def test_store_fallback_rejects_links_and_exclusive_temp_collisions(
     monkeypatch.setattr(
         "skillroll.artifacts.store.uuid.uuid4", lambda: Token(next(values))
     )
-    store.write(directory, facts_for(run_id, started, manifest), manifest, ())
+    if os.name == "nt":
+        with pytest.raises(ArtifactError, match="changed temporary evidence file"):
+            store.write(directory, facts_for(run_id, started, manifest), manifest, ())
+    else:
+        store.write(directory, facts_for(run_id, started, manifest), manifest, ())
     assert not (outside / "escaped").exists()
     assert (directory / "inputs.json").is_file()
 

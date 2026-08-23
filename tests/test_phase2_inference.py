@@ -369,6 +369,20 @@ def test_execution_keeps_skill_text_verbatim_and_normalizes_result(
     assert wrapped_instructions("raw").endswith("raw")
 
 
+def test_execution_can_run_an_omission_control_without_skill_text() -> None:
+    runtime = FakeRuntime(SdkExecution(" control answer ", 1, (), ()))
+    attempt = asyncio.run(
+        AgentSkillExecutor(profile(), runtime).execute(
+            ExecutionRequest(None, "user input", InferenceLimits()), world_action
+        )
+    )
+    assert attempt.failure is None
+    assert (
+        attempt.result is not None and attempt.result.final_output == "control answer"
+    )
+    assert "intentionally omitted" in runtime.calls[0][0]
+
+
 def test_execution_stops_unsafe_skill_and_large_input_before_runtime(
     tmp_path: Path,
 ) -> None:
