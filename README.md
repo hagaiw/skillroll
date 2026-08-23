@@ -11,8 +11,8 @@ before changing the prompt.
 
 ## Status
 
-SkillRoll is pre-release and is not yet published on PyPI. Install it from a
-checkout for now. Local evaluation and advisory GitHub checks work today.
+SkillRoll is an early project. Local evaluation and advisory GitHub checks work
+today; expect the interface to evolve between minor releases.
 
 A passing run means one observed attempt met one case. It is useful evidence,
 not proof that a skill is correct or ready for blocking CI.
@@ -23,9 +23,7 @@ SkillRoll requires Python 3.12 or later and
 [`uv`](https://docs.astral.sh/uv/).
 
 ```shell
-git clone https://github.com/hagaiw/skillroll.git
-cd skillroll
-uv tool install .
+uv tool install skillroll
 ```
 
 Initialize a repository that already contains `SKILL.md` files:

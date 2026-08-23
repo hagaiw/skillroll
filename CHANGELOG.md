@@ -5,6 +5,10 @@ Notable user-visible changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-23
+
+Initial public release.
+
 ### Added
 
 - Named inference profiles with preflight-only fallback, usage reporting, and
@@ -25,10 +29,5 @@ Notable user-visible changes are recorded here. The format follows
   unrun `INCOMPLETE` outcomes.
 - Public documentation is consolidated around the current product, and
   historical development records are no longer tracked in the repository.
-
-## [0.1.0] - 2026-08-18
-
-Initial development baseline. This version was not published under the current
-PyPI name.
 
 [Unreleased]: https://github.com/hagaiw/skillroll/compare/v0.1.0...HEAD

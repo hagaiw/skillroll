@@ -197,10 +197,10 @@ def test_public_model_guidance_keeps_changing_routes_as_sanity_only() -> None:
     assert "SkillRoll does not fetch prices" in guide
 
 
-def test_public_docs_do_not_claim_the_conflicting_pypi_install() -> None:
+def test_public_docs_use_the_pypi_install() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "uv tool install skillroll\n" not in readme
-    assert "uv tool install ." in readme
+    assert "uv tool install skillroll\n" in readme
+    assert "uv tool install ." not in readme
 
 
 def test_ci_is_read_only_secretless_and_cross_platform() -> None:
