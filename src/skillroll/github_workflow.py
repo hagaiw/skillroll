@@ -95,6 +95,7 @@ jobs:
       github.event.pull_request.author_association == 'OWNER'
     needs: validate
     runs-on: ubuntu-latest
+    environment: skillroll-eval
     steps:
       - uses: actions/checkout@v7
         with:
@@ -123,6 +124,7 @@ jobs:
   trusted-live-eval:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    environment: skillroll-eval
     steps:
       - name: Check the reviewed revision format
         uses: {action_ref}
