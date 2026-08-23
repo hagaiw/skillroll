@@ -58,7 +58,7 @@ runs:
     - uses: actions/setup-python@v7
       with:
         python-version: "3.12"
-    - uses: astral-sh/setup-uv@v10
+    - uses: astral-sh/setup-uv@v10.0.1
     - id: run
       shell: bash
       env:

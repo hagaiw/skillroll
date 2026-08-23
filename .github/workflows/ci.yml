@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
       - uses: docker://rhysd/actionlint:1.7.7
       - run: uv sync --all-groups --locked
       - run: uv run coverage run -m pytest
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
       - run: uv sync --all-groups --locked
       - run: uv run pytest -q
 
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
       - run: uv sync --all-groups --locked
       - run: uv build
       - run: uv run pytest -q tests/test_package_e2e.py
