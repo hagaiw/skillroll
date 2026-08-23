@@ -77,7 +77,7 @@ def test_release_files_are_lockstep_and_known_field_mismatch_is_reported(
 
     plugin = root / "plugins/flow-runner/.claude-plugin/plugin.json"
     plugin.write_text(
-        plugin.read_text().replace('"0.1.0"', '"0.2.0"'), encoding="utf-8"
+        plugin.read_text().replace('"0.1.1"', '"0.2.0"'), encoding="utf-8"
     )
     report = validate_release_files(root)
     assert not report.is_valid
@@ -140,21 +140,21 @@ def test_version_bound_release_gate_file_is_strict_and_current(tmp_path: Path) -
     ("source", "message"),
     [
         ("not = [toml", "readable TOML"),
-        ("schema_version=1\nversion='0.1.0'\ngates=[]\nextra=1", "top-level"),
-        ("schema_version=2\nversion='0.1.0'\ngates=[]", "schema_version"),
+        ("schema_version=1\nversion='0.1.1'\ngates=[]\nextra=1", "top-level"),
+        ("schema_version=2\nversion='0.1.1'\ngates=[]", "schema_version"),
         ("schema_version=1\nversion='9.9.9'\ngates=[]", "canonical"),
-        ("schema_version=1\nversion='0.1.0'\ngates='bad'", "gates array"),
+        ("schema_version=1\nversion='0.1.1'\ngates='bad'", "gates array"),
         (
-            "schema_version=1\nversion='0.1.0'\ngates=[1]",
+            "schema_version=1\nversion='0.1.1'\ngates=[1]",
             "name, state, and detail",
         ),
         (
-            "schema_version=1\nversion='0.1.0'\n"
+            "schema_version=1\nversion='0.1.1'\n"
             "gates=[{name='installed-live-e2e',state='PASS'}]",
             "name, state, and detail",
         ),
         (
-            "schema_version=1\nversion='0.1.0'\n"
+            "schema_version=1\nversion='0.1.1'\n"
             "gates=[{name=1,state='PASS',detail='x'}]",
             "must be text",
         ),

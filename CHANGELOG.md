@@ -5,6 +5,13 @@ Notable user-visible changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-23
+
+### Fixed
+
+- The bundled flow runner now requires separate `Skill` actions and completion
+  of the requested flow instead of allowing a plan-only response.
+
 ### Changed
 
 - Generated GitHub workflows use the current checkout action and require an
@@ -37,4 +44,5 @@ Initial public release.
 - Public documentation is consolidated around the current product, and
   historical development records are no longer tracked in the repository.
 
-[Unreleased]: https://github.com/hagaiw/skillroll/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/hagaiw/skillroll/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/hagaiw/skillroll/compare/v0.1.0...v0.1.1
