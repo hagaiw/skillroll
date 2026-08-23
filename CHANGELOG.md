@@ -9,6 +9,8 @@ Notable user-visible changes are recorded here. The format follows
 
 - Generated GitHub workflows use the current checkout action and require an
   explicit repository variable before automatic live pull-request evaluation.
+- Live evaluation jobs use a dedicated GitHub environment so access to the
+  inference secret can require approval.
 
 ## [0.1.0] - 2026-08-23
 

@@ -252,6 +252,7 @@ def test_generated_workflow_has_visible_safe_boundaries() -> None:
     assert "author_association == 'OWNER'" in workflow
     assert "head.repo.full_name == github.repository" in workflow
     assert "vars.SKILLROLL_LIVE_EVAL == 'true'" in workflow
+    assert workflow.count("environment: skillroll-eval") == 2
     assert "MODEL_KEY: ${{ secrets.MODEL_KEY }}" in workflow
     assert "release-verify" in workflow and "schedule:" not in workflow
     assert "workflow_dispatch" in workflow and "reviewed_ref" in workflow
