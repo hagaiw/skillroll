@@ -191,7 +191,9 @@ def test_markdown_links_do_not_gate_validation(tmp_path: Path) -> None:
     )
 
 
-def test_minimum_case_guard_distinguishes_zero_cases_from_one(tmp_path: Path) -> None:
+def test_minimum_case_guard_only_suggests_deepening_started_coverage(
+    tmp_path: Path,
+) -> None:
     root = write_config(
         tmp_path / "repository", 'schema_version = 1\nskills_path = "skills"\n'
     )
@@ -205,10 +207,10 @@ def test_minimum_case_guard_distinguishes_zero_cases_from_one(tmp_path: Path) ->
         if finding.guard_id == "SCG2001"
     }
 
-    assert findings[empty.name].summary == "The 'empty' skill has no valid eval cases."
-    assert "Add a focused" in (findings[empty.name].next_action or "")
-    assert findings[covered.name].summary == (
-        "The 'covered' skill has fewer than two valid eval cases."
+    assert empty.name not in findings
+    assert (
+        findings[covered.name].summary
+        == "The 'covered' skill has only one valid eval case."
     )
     assert "one case is still runnable" in (findings[covered.name].next_action or "")
 

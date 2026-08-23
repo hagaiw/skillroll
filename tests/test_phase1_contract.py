@@ -53,7 +53,6 @@ def test_validate_reports_missing_section_and_policy_failure(tmp_path: Path) -> 
     completed = run_module("validate", "--repo", str(repository))
     assert completed.returncode == 1
     assert "Success criteria" in completed.stderr
-    assert "Add a focused" in completed.stderr
 
 
 def test_validate_rejects_unsafe_config_and_is_side_effect_free(tmp_path: Path) -> None:
