@@ -4,6 +4,15 @@ An eval case is a realistic request, a controlled external situation, and a
 short description of success. Keep each case under the selected skill's
 `evals/` directory and test one important behavior.
 
+Create one named template from the configured repository root:
+
+```shell
+skillroll new my-skill/important-behavior
+```
+
+SkillRoll creates `my-skill/evals/important-behavior.eval.md` without replacing
+existing work. Open that file in your usual editor and fill its three sections.
+
 ```markdown
 # Summarize an incident
 

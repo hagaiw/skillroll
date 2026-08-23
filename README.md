@@ -1,13 +1,40 @@
-# SkillRoll
+<p align="center">
+  <img src="docs/assets/skillroll-mascot.png" alt="SkillRoll mascot: a hooded otter holding a twenty-sided die and field guide" width="170">
+</p>
 
-SkillRoll is a small behavioral eval framework for
-[Agent Skills](https://agentskills.io/). Write a Markdown case beside a skill,
-run it in a controlled simulated world, and review the verdict and evidence.
+<h1 align="center">SkillRoll</h1>
 
-Use it to turn an important prompt behavior into a readable regression case
-before changing the prompt.
+<p align="center">
+  <strong>Regression tests for AI agent skills.</strong><br>
+  Turn a real prompt failure into a readable case, run it in a bounded world,
+  and inspect the evidence before the behavior ships again.
+</p>
+
+<p align="center">
+  <a href="#quickstart"><strong>Get started</strong></a> ·
+  <a href="docs/writing-evals.md">Write an eval</a> ·
+  <a href="docs/results.md">Understand a result</a>
+</p>
+
+![SkillRoll demo: create a wait-for-CI eval, edit it, run it, and read the judge summary](docs/assets/skillroll-demo.gif)
+
+SkillRoll is a behavioral eval framework for
+[Agent Skills](https://agentskills.io/). Keep a Markdown case beside a skill,
+run the skill in a controlled simulated world, and get a verdict with
+reviewable evidence.
 
 > If you can explain what a skill should do, you can eval it.
+
+## The loop
+
+1. **Capture** one important behavior as `Input`, `World`, and observable
+   `Success criteria`.
+2. **Run** the skill without exposing your filesystem, network, or services to
+   the simulated World.
+3. **Inspect** the report, fix the smallest responsible prompt, and keep the
+   case as a regression test.
+
+![Dark SkillRoll evidence summary showing required E2E still running and the merge correctly withheld](docs/assets/evidence-report.png)
 
 ## Status
 
@@ -26,28 +53,32 @@ SkillRoll requires Python 3.12 or later and
 uv tool install skillroll
 ```
 
-Initialize a repository that already contains `SKILL.md` files:
+From a repository that already contains `SKILL.md` files:
 
 ```shell
-skillroll init \
-  --repo /path/to/my-skills \
-  --skills-path skills \
-  --starter-evals my-skill \
-  --yes
-
-skillroll validate --repo /path/to/my-skills --all
+cd /path/to/my-skills
+skillroll init --yes
+skillroll new my-skill/first-use
 ```
 
-`skills_path` is relative to the target repository. `--starter-evals` and
-`--case` are relative to `skills_path`. Validation is offline: it does not need
-an API key or call a model.
+SkillRoll detects the common folder containing your skills. Use
+`--skills-path PATH` only when you need to override it. `new` creates one
+no-overwrite template at `my-skill/evals/first-use.eval.md`.
 
-Open the generated case under `my-skill/evals/`, replace the placeholders, and
-delete any starter case you do not need. A case has three parts:
+Open the generated case under `my-skill/evals/` and replace the placeholders.
+A case has three parts:
 
 - `Input`: the realistic request and context given to the skill;
 - `World`: simulated external state and action results; and
 - `Success criteria`: observable outcomes that allow equivalent good answers.
+
+Check the case structure before spending inference:
+
+```shell
+skillroll validate --case my-skill/evals/first-use.eval.md
+```
+
+Validation is offline: it does not need an API key or call a model.
 
 Configure an OpenAI-compatible Chat Completions endpoint in
 `skillroll.toml`:
@@ -67,15 +98,24 @@ outputs. Export the configured key, check compatibility, and run a case:
 
 ```shell
 export SKILLROLL_API_KEY="your-key"
-skillroll doctor --repo /path/to/my-skills
-skillroll eval \
-  --repo /path/to/my-skills \
-  --case my-skill/evals/first-use.eval.md
+skillroll doctor
+skillroll eval --case my-skill/evals/first-use.eval.md
 ```
 
 `doctor` checks the endpoint. `eval` spends inference and writes a private run
-under `.skillroll/runs/`. Start with `report.md`; use `result.json` for
-automation and `transcript.jsonl` to inspect the skill's actions.
+under `.skillroll/runs/`; the command prints the exact `report.md` path. Use
+`result.json` for automation and `transcript.jsonl` to inspect the skill's
+actions.
+
+## What SkillRoll is for
+
+SkillRoll answers a narrow, practical question: **did this observed skill run
+preserve the behavior this case describes?** It is useful while authoring or
+changing a skill and as an advisory regression check in pull requests.
+
+It is not a leaderboard, a universal skill score, or proof that a skill is
+correct. For model research or claims about aggregate skill lift, use a
+benchmark designed for repeated controlled comparison.
 
 | Outcome | Meaning |
 | --- | --- |

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from importlib import resources
 from io import StringIO
 from typing import Never, TextIO
 
@@ -15,6 +17,31 @@ from skillroll.diagnostics import CommandResult, Diagnostic, render_json, render
 from skillroll.outcomes import Outcome
 
 Command = Callable[[], CommandResult]
+
+
+def _setup_mascot() -> str:
+    """Load the fixed ANSI welcome art shipped with the CLI."""
+    path = resources.files("skillroll").joinpath("_assets", "setup-mascot.ansi")
+    try:
+        return path.read_text(encoding="utf-8").rstrip("\n")
+    except (FileNotFoundError, OSError, UnicodeError):
+        return ""
+
+
+def _show_setup_mascot(
+    *, command: str | None, output: str, out: TextIO, result: CommandResult
+) -> bool:
+    """Keep ANSI art out of JSON, pipes, no-op setup, and limited terminals."""
+    return (
+        command == "init"
+        and output == "text"
+        and result.outcome is Outcome.PASS
+        and bool(result.data.get("skills_path"))
+        and bool(result.data.get("changed_paths"))
+        and bool(getattr(out, "isatty", lambda: False)())
+        and os.environ.get("TERM") != "dumb"
+        and "NO_COLOR" not in os.environ
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +121,15 @@ def _parser() -> SkillRollParser:
         "--action-ref",
         metavar="OWNER/REPOSITORY@TAG",
         help="Released SkillRoll Action reference for --github-workflow.",
+    )
+    new_parser = commands.add_parser(
+        "new", help="Create one editable eval case beside an existing skill."
+    )
+    new_parser.add_argument(
+        "target", metavar="SKILL/CASE-NAME", help="Skill path and new case name."
+    )
+    new_parser.add_argument(
+        "--repo", metavar="PATH", help="Repository directory containing SkillRoll."
     )
     doctor_parser = commands.add_parser(
         "doctor", help="Check whether configured inference can run SkillRoll."
@@ -211,7 +247,8 @@ def _missing_command() -> CommandResult:
                 "SC0002",
                 "Choose one SkillRoll command to continue.",
                 next_action=(
-                    "Run 'skillroll --help' and choose init, doctor, validate, or eval."
+                    "Run 'skillroll --help' and choose init, new, doctor, validate, "
+                    "or eval."
                 ),
             ),
         ),
@@ -253,12 +290,14 @@ def main(
     output = _requested_output(arguments)
     out = sys.stdout if stdout is None else stdout
     err = sys.stderr if stderr is None else stderr
+    parsed_command: str | None = None
     try:
         namespace = _parser().parse_args(arguments)
     except ParseFailure as failure:
         result = _syntax_error(failure.message)
     else:
         output = namespace.output
+        parsed_command = namespace.command
         if namespace.command is None:
             result = _missing_command()
         else:
@@ -283,6 +322,13 @@ def main(
 
                     result = doctor.run(
                         repo=namespace.repo, model_profile=namespace.model_profile
+                    )
+                elif namespace.command == "new" and commands is None:
+                    from skillroll.commands import create_case
+
+                    result = create_case.run(
+                        target=namespace.target,
+                        repo=namespace.repo,
                     )
                 elif namespace.command == "validate" and commands is None:
                     from skillroll.commands import validate
@@ -311,6 +357,15 @@ def main(
                     ]()
             except Exception:
                 result = _internal_error(namespace.command)
+    if _show_setup_mascot(
+        command=parsed_command,
+        output=output,
+        out=out,
+        result=result,
+    ):
+        mascot = _setup_mascot()
+        if mascot:
+            out.write(mascot + "\n\n")
     rendered = render_json(result) if output == "json" else render_text(result)
     destination = out if output == "json" or result.outcome is Outcome.PASS else err
     destination.write(rendered)

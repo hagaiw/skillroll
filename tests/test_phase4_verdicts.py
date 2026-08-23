@@ -1793,6 +1793,7 @@ def test_run_validates_sample_bounds_and_reports_experiment_summary(
     monkeypatch.setattr(evaluate, "evaluate_experiment", experiment)
     result = evaluate.run(repo=str(tmp_path), samples=2, environment={})
     assert result.outcome is Outcome.PASS
+    assert "Report: .skillroll/experiments/experiment-id/report.md." in result.summary
     assert result.data["experiment_artifact_directory"] == (
         ".skillroll/experiments/experiment-id"
     )
@@ -2180,13 +2181,25 @@ def test_evaluate_command_maps_validation_and_service_results(
     monkeypatch.setattr(evaluate, "validate_repository", lambda *_: report)
 
     async def outcome(*_: object, **__: object) -> tuple[CaseResult, ...]:
-        return (CaseResult(case, "FAIL", None, None, (), (), None, None),)
+        return (
+            CaseResult(
+                case,
+                "FAIL",
+                None,
+                None,
+                (),
+                (),
+                None,
+                PurePosixPath(".skillroll/runs/run-id"),
+            ),
+        )
 
     monkeypatch.setattr(evaluate, "evaluate_repository", outcome)
     result = evaluate.run(repo=str(tmp_path), environment={"KEY": "x"})
     assert (
         result.outcome.name == "FAIL" and result.data["cases"][0]["outcome"] == "FAIL"
     )
+    assert "Report: .skillroll/runs/run-id/report.md." in result.summary
 
     async def failure(*_: object, **__: object) -> InferenceFailure:
         return InferenceFailure(InferenceFailureKind.TIMEOUT, "timed")
@@ -2195,6 +2208,50 @@ def test_evaluate_command_maps_validation_and_service_results(
     assert (
         evaluate.run(repo=str(tmp_path), environment={"KEY": "x"}).outcome.name
         == "ERROR"
+    )
+
+
+def test_single_case_summary_includes_one_line_judge_rationale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings("https://example.test/v1", "tiny", "KEY"),
+        tmp_path / "skillroll.toml",
+    )
+    report = ValidationReport(tmp_path, config, (case.skill,), (case,), (), ())
+    monkeypatch.setattr(evaluate, "validate_repository", lambda *_: report)
+    judged = JudgeResult(
+        "PASS",
+        "The skill inspected every required check,\nthen withheld the merge.",
+        (),
+        None,
+        None,
+    )
+
+    async def outcome(*_: object, **__: object) -> tuple[CaseResult, ...]:
+        return (
+            CaseResult(
+                case,
+                "PASS",
+                None,
+                judged,
+                (),
+                (),
+                None,
+                PurePosixPath(".skillroll/runs/run-id"),
+            ),
+        )
+
+    monkeypatch.setattr(evaluate, "evaluate_repository", outcome)
+    result = evaluate.run(repo=str(tmp_path), environment={"KEY": "x"})
+    assert (
+        "Judge: The skill inspected every required check, then withheld the merge."
+        in result.summary
     )
 
 

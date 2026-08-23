@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 from conftest import run_module
 
+from skillroll import cli
 from skillroll.commands import doctor, evaluate, initialize
 from skillroll.commands.initialize import (
     DEFAULT_OPENROUTER_API_KEY_ENV,
@@ -41,6 +42,56 @@ def make_skill(root: Path, relative: str = "skills/review") -> Path:
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("# Review\n", encoding="utf-8")
     return skill
+
+
+class TerminalOutput(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def test_fresh_interactive_init_displays_packaged_mascot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    make_skill(repository)
+    output = TerminalOutput()
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+
+    assert (
+        cli.main(
+            ["init", "--repo", str(repository), "--skills-path", "skills"],
+            stdout=output,
+        )
+        == 0
+    )
+    rendered = output.getvalue()
+    assert "\x1b[" in rendered
+    assert "SkillRoll created setup files" in rendered
+
+
+def test_setup_mascot_stays_out_of_noninteractive_and_json_output(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    make_skill(repository)
+    output = io.StringIO()
+    assert (
+        cli.main(
+            [
+                "--output=json",
+                "init",
+                "--repo",
+                str(repository),
+                "--skills-path",
+                "skills",
+            ],
+            stdout=output,
+        )
+        == 0
+    )
+    assert "\x1b[" not in output.getvalue()
+    json.loads(output.getvalue())
 
 
 def test_root_skills_path_is_a_narrow_valid_config_value(tmp_path: Path) -> None:

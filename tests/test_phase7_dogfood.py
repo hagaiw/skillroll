@@ -55,8 +55,8 @@ def test_dogfood_skills_and_cases_validate_without_making_marketplace_required()
     assert report.config.inference is not None
     assert report.config.inference.model == "openai/gpt-4.1-nano"
     assert not report.findings
-    assert len(report.skills) == 12
-    assert len(report.cases) == 43
+    assert len(report.skills) == 13
+    assert len(report.cases) == 45
 
 
 def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> None:
@@ -98,4 +98,4 @@ def test_dogfood_declared_renderer_check_runs_when_explicitly_permitted() -> Non
     result = validate.run(repo=str(ROOT), run_commands=True)
 
     assert result.outcome is Outcome.PASS
-    assert result.summary == "Checked 12 skills and ran 3 repository checks."
+    assert result.summary == "Checked 13 skills and ran 3 repository checks."

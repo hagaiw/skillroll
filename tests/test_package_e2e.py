@@ -95,6 +95,7 @@ def test_built_wheel_installs_and_runs_outside_checkout(tmp_path: Path) -> None:
         names = archive.namelist()
         assert "skillroll/cli.py" in names
         assert "skillroll/py.typed" in names
+        assert "skillroll/_assets/setup-mascot.ansi" in names
         assert all(
             name in names
             for name in (
@@ -349,5 +350,5 @@ def test_installed_wheel_validates_the_dogfood_marketplace_without_source_import
 
     assert completed.returncode == 0
     assert json.loads(completed.stdout)["summary"] == (
-        "Checked 12 skills and ran 3 repository checks."
+        "Checked 13 skills and ran 3 repository checks."
     )

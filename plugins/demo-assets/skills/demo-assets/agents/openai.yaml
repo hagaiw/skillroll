@@ -1,0 +1,4 @@
+interface:
+  display_name: "Demo Assets"
+  short_description: "Build truthful terminal demos and README media"
+  default_prompt: "Use $demo-assets to plan and regenerate this project's README demo media."

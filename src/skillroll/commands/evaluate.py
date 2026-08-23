@@ -171,6 +171,11 @@ def _world_usage(
     }
 
 
+def _one_line(value: str) -> str:
+    """Collapse model-authored prose for stable terminal rendering."""
+    return " ".join(value.split())
+
+
 def _judge_data(
     judged: JudgeResult | None, requested_model: str
 ) -> dict[str, object] | None:
@@ -1343,6 +1348,30 @@ def run(
             f"{'s' if len(case_results) != 1 else ''}: "
         )
     )
+    if experiment is not None:
+        report_text = (
+            " Report: " + experiment.artifact_directory.as_posix() + "/report.md."
+        )
+    else:
+        report_paths = tuple(
+            item.artifact_directory / "report.md"
+            for item in case_results
+            if item.artifact_directory is not None
+        )
+        report_text = (
+            ""
+            if not report_paths
+            else f" Report: {report_paths[0].as_posix()}."
+            if len(report_paths) == 1
+            else f" Reports: {len(report_paths)} run folders under .skillroll/runs/."
+        )
+    judge_text = (
+        f" Judge: {_one_line(case_results[0].judge.rationale)}"
+        if experiment is None
+        and len(case_results) == 1
+        and case_results[0].judge is not None
+        else ""
+    )
     return CommandResult(
         outcome,
         summary_text
@@ -1350,11 +1379,13 @@ def run(
         + f"{outcome_counts['FAIL']} fail, "
         + f"{outcome_counts['INCOMPLETE']} incomplete, "
         + f"{outcome_counts['ERROR']} error."
+        + judge_text
         + (
             " Parent experiment: " + experiment.artifact_directory.as_posix() + "."
             if experiment is not None
             else ""
-        ),
+        )
+        + report_text,
         diagnostics,
         {
             "outcome_counts": outcome_counts,
