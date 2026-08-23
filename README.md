@@ -1,13 +1,13 @@
 <p align="center">
-  <img src="docs/assets/skillroll-mascot.png" alt="SkillRoll mascot: a hooded otter holding a twenty-sided die and field guide">
+  <img src="docs/assets/skillroll-mascot.png" alt="skillroll mascot: a hooded otter holding a twenty-sided die and field guide">
 </p>
 
-<h1 align="center">SkillRoll</h1>
+<h1 align="center">skillroll</h1>
 
 <p align="center">
   <strong>Simple eval infrastructure for agent skills.</strong><br>
   Describe one behavior in Markdown. A Dungeon Master simulates the outside
-  world. SkillRoll tells you whether the behavior still works.
+  world. skillroll tells you whether the behavior still works.
 </p>
 
 <p align="center">
@@ -16,16 +16,16 @@
   <a href="docs/results.md">Understand a result</a>
 </p>
 
-![SkillRoll demo: create a wait-for-CI eval, edit it, run it, and read the judge summary](docs/assets/skillroll-demo.gif)
+![skillroll demo: create a wait-for-CI eval, edit it, run it, and read the judge summary](docs/assets/skillroll-demo.gif)
 
-SkillRoll is a drop-in eval harness for repositories of
+skillroll is a drop-in eval harness for repositories of
 [Agent Skills](https://agentskills.io/). It gives prompt maintenance the same
 regression loop that tests give code, without a custom test framework for every
 skill.
 
 > If you can explain what a skill should do, you can eval it.
 
-## Why SkillRoll exists
+## Why skillroll exists
 
 Scripts have exact inputs and outputs. Agent skills do not. A good skill may
 take different paths, use different words, and still do the right thing.
@@ -35,7 +35,7 @@ Traditional eval harnesses work around this with mocks, fixtures, fake APIs,
 and skill-specific setup. Those systems are expensive to write and harder to
 maintain than the prompts they protect.
 
-SkillRoll replaces that setup with one small Markdown case.
+skillroll replaces that setup with one small Markdown case.
 
 ## How it works
 
@@ -64,11 +64,11 @@ No mock server. No fake SDK. No per-skill harness code.
 3. Make the smallest prompt fix that changes the behavior.
 4. Run the case again and keep it as a regression test.
 
-![Dark SkillRoll evidence summary showing required E2E still running and the merge correctly withheld](docs/assets/evidence-report.png)
+![Dark skillroll evidence summary showing required E2E still running and the merge correctly withheld](docs/assets/evidence-report.png)
 
 ## Quickstart
 
-SkillRoll requires Python 3.12 or later and
+skillroll requires Python 3.12 or later and
 [`uv`](https://docs.astral.sh/uv/).
 
 ```shell
@@ -85,7 +85,7 @@ skillroll new my-skill/first-use
 
 `init` detects the skills folder, confirms it with you, and writes a small local
 configuration. `--yes` is only for scripts that need to accept the detected
-folder without questions. SkillRoll does not replace an existing configuration
+folder without questions. skillroll does not replace an existing configuration
 or eval case.
 
 Open `my-skill/evals/first-use.eval.md` and replace the placeholders:
@@ -119,7 +119,7 @@ skillroll validate --case my-skill/evals/first-use.eval.md
 
 ## Connect any compatible model
 
-SkillRoll works with OpenAI-compatible Chat Completions endpoints that support
+skillroll works with OpenAI-compatible Chat Completions endpoints that support
 tool calling and structured JSON output. It is not tied to OpenAI or
 OpenRouter. Enter these values during `init`, or add them to `skillroll.toml`:
 
@@ -174,7 +174,7 @@ Do not use its verdicts as regression or release evidence.
 As of August 23, 2026,
 [OpenRouter lists Luna Pro](https://openrouter.ai/openai/gpt-5.6-luna-pro) at
 $0.20 per million input tokens and $1.20 per million output tokens. These
-working estimates use the prompt sizes and action patterns in SkillRoll's
+working estimates use the prompt sizes and action patterns in skillroll's
 bundled cases and include the compatibility check, skill run, Dungeon Master,
 and judge:
 
@@ -200,12 +200,30 @@ history.
 | `PASS` | The observed behavior met the case. |
 | `FAIL` | The observed behavior missed a success criterion. |
 | `INCOMPLETE` | A required repository check did not run. |
-| `ERROR` | SkillRoll could not produce a trustworthy verdict. |
+| `ERROR` | skillroll could not produce a trustworthy verdict. |
+
+## Add GitHub Actions
+
+After `skillroll.toml` exists, generate the advisory workflow:
+
+```shell
+skillroll init --github-workflow
+```
+
+This writes `.github/workflows/skillroll.yml` without replacing an existing
+workflow. Review it before committing. Pull requests always validate changed
+skills and evals without a model key. To enable model-backed evals for pull
+requests from your own repository, create a `skillroll-eval` environment with
+a secret named by `api_key_env`, then set the `SKILLROLL_LIVE_EVAL` repository
+variable to `true`. Fork pull requests never receive the key.
+
+Start with advisory results. See the [GitHub Actions guide](docs/github-actions.md)
+for manual runs, repository checks, and artifact retention.
 
 ## Keep evals small
 
 One case should cover one important behavior. Narrow cases are easier to write,
-read, debug, and run in CI. SkillRoll bounds turns, time, and model output, and
+read, debug, and run in CI. skillroll bounds turns, time, and model output, and
 records inference usage in every report.
 
 Use deterministic rules for exact action results. Let the Dungeon Master handle
@@ -213,17 +231,17 @@ the behavior that would otherwise require mocks or elaborate setup.
 
 ## Trust and security
 
-SkillRoll is local, open source infrastructure:
+skillroll is local, open source infrastructure:
 
-- SkillRoll has no telemetry, analytics, tracking, or model tracing, and will
+- skillroll has no telemetry, analytics, tracking, or model tracing, and will
   not add them.
-- There is no SkillRoll account or hosted service. The only model traffic goes
+- There is no skillroll account or hosted service. The only model traffic goes
   to the endpoint you configure when you run `doctor` or an eval.
-- API keys stay in environment variables. SkillRoll does not write them to
+- API keys stay in environment variables. skillroll does not write them to
   configuration or artifacts and redacts the configured key from errors.
 - Run artifacts stay under `.skillroll/runs/` and are ignored by the generated
   `.gitignore` rule.
-- SkillRoll is released under the permissive [MIT License](LICENSE). The code,
+- skillroll is released under the permissive [MIT License](LICENSE). The code,
   prompts, and security boundaries are public and reviewable.
 - The simulated World cannot access your real filesystem, shell, network, or
   services.
@@ -233,7 +251,7 @@ SkillRoll is local, open source infrastructure:
 - One passing run is evidence for one case, not proof that a skill is correct.
 - Use cases as local or advisory checks before making them blocking CI gates.
 
-SkillRoll is an early project. Local evals and advisory GitHub checks work
+skillroll is an early project. Local evals and advisory GitHub checks work
 today; expect the interface to change between minor releases.
 
 ## Learn more
@@ -247,7 +265,7 @@ today; expect the interface to change between minor releases.
 The [documentation index](docs/index.md) lists the same guides by task.
 
 See [PRINCIPLES.md](PRINCIPLES.md) for the project principles and
-[CONTRIBUTING.md](.github/CONTRIBUTING.md) to work on SkillRoll. Project
+[CONTRIBUTING.md](.github/CONTRIBUTING.md) to work on skillroll. Project
 support, security reporting, and governance are in
 [SUPPORT.md](.github/SUPPORT.md), [SECURITY.md](.github/SECURITY.md), and
 [GOVERNANCE.md](.github/GOVERNANCE.md).
