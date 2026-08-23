@@ -55,10 +55,10 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7
       with:
         python-version: "3.12"
-    - uses: astral-sh/setup-uv@v6
+    - uses: astral-sh/setup-uv@v10
     - id: run
       shell: bash
       env:
@@ -91,7 +91,7 @@ runs:
         echo "exit-code=$status" >> "$GITHUB_OUTPUT"
         exit 0
     - if: always() && inputs.upload-artifact == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: skillroll-evidence-${{ github.run_id }}-${{ github.job }}
         path: .skillroll/runs/

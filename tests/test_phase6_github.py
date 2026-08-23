@@ -655,6 +655,6 @@ def test_composite_action_declares_no_secret_input_or_unsafe_trigger() -> None:
     assert "pull_request_target" not in action
     assert "javascript" not in action.lower()
     assert "uv run --project" in action
-    assert "actions/upload-artifact@v4" in action
+    assert "actions/upload-artifact@v7" in action
     assert "command-notice" in parsed["inputs"]
     assert "--command-notice" in action
