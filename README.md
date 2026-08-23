@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/skillroll-mascot.png" alt="SkillRoll mascot: a hooded otter holding a twenty-sided die and field guide" width="170">
+  <img src="docs/assets/skillroll-mascot.png" alt="SkillRoll mascot: a hooded otter holding a twenty-sided die and field guide">
 </p>
 
 <h1 align="center">SkillRoll</h1>
