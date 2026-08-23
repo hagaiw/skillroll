@@ -48,6 +48,11 @@ _PREFLIGHT_RESPONSE_FORMAT: dict[str, JSONValue] = {
     },
 }
 
+# Compatibility replies contain one tiny tool call and one tiny JSON object.
+# Do not inherit a repository's much larger eval-generation allowance: reasoning
+# providers may use that entire budget before returning these deterministic replies.
+_PREFLIGHT_MAX_OUTPUT_TOKENS = 1024
+
 
 @dataclass(frozen=True, slots=True)
 class PreflightEvidence:
@@ -96,6 +101,7 @@ async def run_preflight(
     accepting the model's compliant response keeps this check useful across a
     wider compatible interface.
     """
+    output_tokens = min(profile.limits.max_output_tokens, _PREFLIGHT_MAX_OUTPUT_TOKENS)
     first = ChatRequest(
         profile.model,
         (
@@ -107,7 +113,7 @@ async def run_preflight(
         ),
         (_PREFLIGHT_TOOL,),
         None,
-        profile.limits.max_output_tokens,
+        output_tokens,
     )
     try:
         first_response = await transport.complete(first)
@@ -129,7 +135,7 @@ async def run_preflight(
             ),
             (),
             None,
-            profile.limits.max_output_tokens,
+            output_tokens,
             response_format=_PREFLIGHT_RESPONSE_FORMAT,
         )
         second_response = await transport.complete(second)

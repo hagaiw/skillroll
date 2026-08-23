@@ -122,6 +122,17 @@ model turns, so leave one for the final response after any actions.
 `max_output_tokens` applies to the skill run, Dungeon Master, and judge.
 Raise a limit only when the intended behavior needs it.
 
+Each simulated external action uses a model turn. Reserve one turn for the
+skill's final response. If a case is about a decision process rather than the
+contents of a repository or service, make it text-only instead of encouraging
+irrelevant exploratory reads. Raise `max_turns` only when those actions are
+part of the behavior being tested.
+
+After adding cases, confirm they appear in version-control status. A broad
+repository rule such as `evals/` can hide every SkillRoll case; validation warns
+about that common rule, but Git remains the authority for more complex ignore
+patterns.
+
 For an important case, run independent samples. You can also run the same case
 without the skill:
 

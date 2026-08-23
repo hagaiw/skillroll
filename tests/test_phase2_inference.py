@@ -156,6 +156,8 @@ def test_preflight_makes_exactly_two_ordered_requests() -> None:
     first, second = transport.requests
     assert first.force_tool is None
     assert first.temperature is None and second.temperature is None
+    assert first.max_output_tokens == 1024
+    assert second.max_output_tokens == 1024
     assert first.messages[0].role == "user"
     assert second.messages[-2].role == "tool"
     assert second.messages[-2].content == "ready"

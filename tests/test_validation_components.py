@@ -213,6 +213,29 @@ def test_minimum_case_guard_distinguishes_zero_cases_from_one(tmp_path: Path) ->
     assert "one case is still runnable" in (findings[covered.name].next_action or "")
 
 
+def test_validation_warns_when_repository_ignore_hides_eval_directories(
+    tmp_path: Path,
+) -> None:
+    root = write_config(
+        tmp_path / "repository", 'schema_version = 1\nskills_path = "skills"\n'
+    )
+    skill = make_skill(root)
+    (skill.evals_directory / "one.eval.md").write_text(valid_case(), encoding="utf-8")
+    (root / ".gitignore").write_text("build/\nevals/\n", encoding="utf-8")
+
+    result = command_result(validate_repository(root))
+
+    assert result.outcome.name == "PASS"
+    warning = next(item for item in result.diagnostics if item.code == "SCG1007")
+    assert warning.affected == ".gitignore"
+    assert "version-control status" in (warning.next_action or "")
+
+    (root / ".gitignore").write_text("evals/\n!evals/\n", encoding="utf-8")
+    assert not any(
+        item.guard_id == "SCG1007" for item in validate_repository(root).findings
+    )
+
+
 def test_declared_check_can_cover_safe_missing_non_script_path(tmp_path: Path) -> None:
     root = write_config(
         tmp_path / "repository", 'schema_version = 1\nskills_path = "skills"\n'

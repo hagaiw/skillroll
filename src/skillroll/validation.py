@@ -19,6 +19,44 @@ from skillroll.models import (
     effective_limits,
 )
 from skillroll.outcomes import Outcome
+from skillroll.repository_io import readable_utf8
+
+
+def _ignored_evals_finding(
+    root: Path, cases: tuple[EvalCase, ...]
+) -> GuardFinding | None:
+    """Warn for the common repository-wide ``evals/`` Git ignore rule.
+
+    Full Git ignore semantics belong to Git itself and validation deliberately
+    runs no repository commands. This catches the portable rule that caused a
+    real adoption failure without pretending to implement Git's matcher.
+    """
+    if not cases:
+        return None
+    source = readable_utf8(root / ".gitignore")
+    if source is None:
+        return None
+    ignored = False
+    for raw_line in source.splitlines():
+        line = raw_line.strip()
+        if line in {"evals", "evals/", "**/evals", "**/evals/"}:
+            ignored = True
+        elif line in {"!evals", "!evals/", "!**/evals", "!**/evals/"}:
+            ignored = False
+    if not ignored:
+        return None
+    return _finding(
+        Diagnostic(
+            "SCG1007",
+            "The repository-wide .gitignore rule for evals may hide SkillRoll cases.",
+            affected=".gitignore",
+            next_action=(
+                "Add a later negation rule for the intended skill eval paths, then "
+                "confirm the cases appear in version-control status."
+            ),
+        ),
+        disposition="advisory",
+    )
 
 
 def _finding(
@@ -173,6 +211,9 @@ def validate_repository(
         candidate_skills = tuple({case.skill for case in cases})
     parsed_cases = tuple(cases)
     findings.extend(_limit_findings(config, parsed_cases))
+    ignored_evals = _ignored_evals_finding(root, parsed_cases)
+    if ignored_evals is not None:
+        findings.append(ignored_evals)
     if actual_selection.case is None:
         findings.extend(minimum_case_findings(config, candidate_skills, parsed_cases))
     return ValidationReport(
