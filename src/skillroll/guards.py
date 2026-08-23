@@ -33,19 +33,32 @@ def minimum_case_findings(
     counts = {skill: 0 for skill in skills}
     for case in cases:
         counts[case.skill] += 1
+
+    def diagnostic(skill: Skill, count: int) -> Diagnostic:
+        if count == 0:
+            return Diagnostic(
+                "SCG2001",
+                f"The '{skill.name}' skill has no valid eval cases.",
+                affected=skill.name,
+                next_action=(
+                    "Add a focused .eval.md file if behavioral coverage is useful."
+                ),
+            )
+        return Diagnostic(
+            "SCG2001",
+            f"The '{skill.name}' skill has fewer than two valid eval cases.",
+            affected=skill.name,
+            next_action=(
+                "Add another .eval.md file if broader coverage is useful; one "
+                "case is still runnable."
+            ),
+        )
+
     return tuple(
         _policy(
             config,
             "SCG2001",
-            Diagnostic(
-                "SCG2001",
-                f"The '{skill.name}' skill has fewer than two valid eval cases.",
-                affected=skill.name,
-                next_action=(
-                    "Add another .eval.md file if broader coverage is useful; one "
-                    "case is still runnable."
-                ),
-            ),
+            diagnostic(skill, count),
         )
         for skill, count in counts.items()
         if count < 2

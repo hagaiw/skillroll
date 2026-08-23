@@ -191,6 +191,28 @@ def test_markdown_links_do_not_gate_validation(tmp_path: Path) -> None:
     )
 
 
+def test_minimum_case_guard_distinguishes_zero_cases_from_one(tmp_path: Path) -> None:
+    root = write_config(
+        tmp_path / "repository", 'schema_version = 1\nskills_path = "skills"\n'
+    )
+    empty = make_skill(root, "empty")
+    covered = make_skill(root, "covered")
+    (covered.evals_directory / "one.eval.md").write_text(valid_case(), encoding="utf-8")
+
+    findings = {
+        finding.diagnostic.affected: finding.diagnostic
+        for finding in validate_repository(root).findings
+        if finding.guard_id == "SCG2001"
+    }
+
+    assert findings[empty.name].summary == "The 'empty' skill has no valid eval cases."
+    assert "Add a focused" in (findings[empty.name].next_action or "")
+    assert findings[covered.name].summary == (
+        "The 'covered' skill has fewer than two valid eval cases."
+    )
+    assert "one case is still runnable" in (findings[covered.name].next_action or "")
+
+
 def test_declared_check_can_cover_safe_missing_non_script_path(tmp_path: Path) -> None:
     root = write_config(
         tmp_path / "repository", 'schema_version = 1\nskills_path = "skills"\n'
