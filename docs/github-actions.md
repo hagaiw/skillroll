@@ -33,8 +33,10 @@ checks are responsible for protecting and qualifying their cases.
 
 ## Configure the key
 
-Create an Actions secret matching `api_key_env` in `skillroll.toml`. The
-generated workflow exposes it only to live inference steps. Validation and
+Create an Actions secret matching `api_key_env` in `skillroll.toml`. To enable
+automatic live evaluation for same-repository owner pull requests, also create
+the Actions variable `SKILLROLL_LIVE_EVAL` with the value `true`. The generated
+workflow exposes the secret only to live inference steps. Validation and
 repository-check jobs do not receive it.
 
 Repository checks are unsandboxed and may use the runner's network or other

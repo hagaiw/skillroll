@@ -246,9 +246,12 @@ def test_generated_workflow_has_visible_safe_boundaries() -> None:
     assert "pull_request_target" not in workflow
     assert "permissions:\n  contents: read" in workflow
     assert "persist-credentials: false" in workflow
+    assert "actions/checkout@v7" in workflow
+    assert "actions/checkout@v4" not in workflow
     assert "fetch-depth: 0" in workflow
     assert "author_association == 'OWNER'" in workflow
     assert "head.repo.full_name == github.repository" in workflow
+    assert "vars.SKILLROLL_LIVE_EVAL == 'true'" in workflow
     assert "MODEL_KEY: ${{ secrets.MODEL_KEY }}" in workflow
     assert "release-verify" in workflow and "schedule:" not in workflow
     assert "workflow_dispatch" in workflow and "reviewed_ref" in workflow

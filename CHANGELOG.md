@@ -5,6 +5,11 @@ Notable user-visible changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Generated GitHub workflows use the current checkout action and require an
+  explicit repository variable before automatic live pull-request evaluation.
+
 ## [0.1.0] - 2026-08-23
 
 Initial public release.
