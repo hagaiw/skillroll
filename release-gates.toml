@@ -1,12 +1,12 @@
 schema_version = 1
-version = "0.1.0"
+version = "0.1.1"
 
 [[gates]]
 name = "installed-live-e2e"
 state = "PASS"
-detail = "The installed wheel passed the bounded two-case OpenRouter E2E on 2026-08-16: deterministic missing evidence failed and the generative-world happy path passed."
+detail = "The built 0.1.1 wheel passed the installed package E2E, and the protected pull-request evaluation verified the changed flow-runner case on 2026-08-23."
 
 [[gates]]
 name = "claude-dependency-install"
 state = "PASS"
-detail = "Claude Code 2.1.223 installed change-review-flow and its exact-tagged flow-runner dependency in an isolated candidate repository and configuration directory on 2026-08-16."
+detail = "Claude Code installed change-review-flow and its exact-tagged flow-runner dependency from the 0.1.1 candidate in an isolated repository and configuration directory on 2026-08-23."

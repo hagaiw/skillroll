@@ -35,7 +35,7 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
         ("config", "user.email", "skillroll-test@invalid.example"),
         ("add", "."),
         ("commit", "-q", "-m", "candidate fixture"),
-        ("tag", "flow-runner--v0.1.0"),
+        ("tag", "flow-runner--v0.1.1"),
     )
     for arguments in git_commands:
         subprocess.run(
@@ -76,9 +76,9 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
 
     plugins = {item["id"]: item for item in json.loads(listed.stdout)}
     assert "+ 1 dependency: flow-runner" in installed.stdout
-    assert plugins["change-review-flow@skillroll"]["version"] == "0.1.0"
+    assert plugins["change-review-flow@skillroll"]["version"] == "0.1.1"
     assert plugins["change-review-flow@skillroll"]["enabled"] is True
-    assert plugins["flow-runner@skillroll"]["version"].startswith("0.1.0-")
+    assert plugins["flow-runner@skillroll"]["version"].startswith("0.1.1-")
     assert plugins["flow-runner@skillroll"]["enabled"] is True
     for item in plugins.values():
         assert str(tmp_path) in item["installPath"]
