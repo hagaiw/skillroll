@@ -185,7 +185,7 @@ def _build_environment(tmp_path: Path) -> Path:
     build_environment.pop(ADOPTION_KEY, None)
     build_environment["UV_CACHE_DIR"] = str(tmp_path / "uv cache")
     subprocess.run(
-        [uv, "build", "--no-build-isolation", "--out-dir", str(artifacts)],
+        [uv, "build", "--out-dir", str(artifacts)],
         cwd=ROOT,
         env=build_environment,
         capture_output=True,

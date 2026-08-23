@@ -2,5 +2,5 @@
   "name": "fact-check",
   "author": {"name": "SkillRoll"},
   "description": "Keep a small, sourced fact ledger for one ongoing task.",
-  "version": "0.1.1"
+  "version": "0.1.2"
 }

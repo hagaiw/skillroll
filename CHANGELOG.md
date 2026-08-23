@@ -5,6 +5,17 @@ Notable user-visible changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-23
+
+### Changed
+
+- Simplified setup and project messaging around Markdown evals, Dungeon Master
+  simulation, provider-neutral model configuration, and prompt TDD.
+- Made OpenRouter Free an explicit setup check and documented Luna Pro as the
+  current OpenRouter recommendation for ongoing evals.
+- Moved GitHub community-health policies under `.github/` and renamed the
+  project philosophy to `PRINCIPLES.md`.
+
 ## [0.1.1] - 2026-08-23
 
 ### Fixed
@@ -44,5 +55,6 @@ Initial public release.
 - Public documentation is consolidated around the current product, and
   historical development records are no longer tracked in the repository.
 
-[Unreleased]: https://github.com/hagaiw/skillroll/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/hagaiw/skillroll/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/hagaiw/skillroll/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/hagaiw/skillroll/compare/v0.1.0...v0.1.1

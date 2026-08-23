@@ -2,5 +2,5 @@
   "name": "harness-prompts",
   "author": {"name": "SkillRoll"},
   "description": "SkillRoll's executor, Dungeon Master, and judge prompt contracts.",
-  "version": "0.1.1"
+  "version": "0.1.2"
 }
