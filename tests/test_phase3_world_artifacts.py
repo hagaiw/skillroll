@@ -775,11 +775,7 @@ def test_store_rejects_directory_swap_and_temp_symlink(
     monkeypatch.setattr(
         "skillroll.artifacts.store.uuid.uuid4", lambda: Token(next(calls))
     )
-    if os.name == "nt":
-        with pytest.raises(ArtifactError, match="changed temporary evidence file"):
-            store.write(directory, facts_for(run_id, started, manifest), manifest, ())
-    else:
-        store.write(directory, facts_for(run_id, started, manifest), manifest, ())
+    store.write(directory, facts_for(run_id, started, manifest), manifest, ())
     assert not (outside / "escaped").exists()
     assert (directory / "inputs.json").is_file()
 
@@ -833,11 +829,7 @@ def test_store_fallback_rejects_links_and_exclusive_temp_collisions(
     monkeypatch.setattr(
         "skillroll.artifacts.store.uuid.uuid4", lambda: Token(next(values))
     )
-    if os.name == "nt":
-        with pytest.raises(ArtifactError, match="changed temporary evidence file"):
-            store.write(directory, facts_for(run_id, started, manifest), manifest, ())
-    else:
-        store.write(directory, facts_for(run_id, started, manifest), manifest, ())
+    store.write(directory, facts_for(run_id, started, manifest), manifest, ())
     assert not (outside / "escaped").exists()
     assert (directory / "inputs.json").is_file()
 
@@ -885,9 +877,58 @@ def test_store_fallback_failure_paths(
     monkeypatch.undo()
 
     original_lstat = Path.lstat
+    recheck_calls = 0
+
+    def recheck_lstat(path: Path) -> os.stat_result:
+        nonlocal recheck_calls
+        if path.name.startswith(".recheck"):
+            recheck_calls += 1
+            if recheck_calls == 1:
+                raise FileNotFoundError()
+            raise OSError()
+        return original_lstat(path)
+
+    class RecheckToken:
+        hex = "recheck"
+
+    monkeypatch.setattr("skillroll.artifacts.store.uuid.uuid4", lambda: RecheckToken())
+    monkeypatch.setattr(Path, "lstat", recheck_lstat)
+    with pytest.raises(ArtifactError, match="recheck a temporary evidence"):
+        store._write_fallback(directory, "recheck", b"x")
+    monkeypatch.undo()
+
+    original_lstat = Path.lstat
+    original_open = os.open
+
+    def race_lstat(path: Path) -> os.stat_result:
+        if path.name.startswith(".race"):
+            raise FileNotFoundError()
+        return original_lstat(path)
+
+    def race_open(file: object, *args: object, **kwargs: object) -> int:
+        if Path(file).name.startswith(".race"):
+            raise FileExistsError()
+        return original_open(file, *args, **kwargs)  # type: ignore[arg-type]
+
+    class RaceToken:
+        hex = "race"
+
+    monkeypatch.setattr("skillroll.artifacts.store.uuid.uuid4", lambda: RaceToken())
+    monkeypatch.setattr(Path, "lstat", race_lstat)
+    monkeypatch.setattr("skillroll.artifacts.store.os.open", race_open)
+    with pytest.raises(ArtifactError, match="atomically write"):
+        store._write_fallback(directory, "race", b"x")
+    monkeypatch.undo()
+
+    original_lstat = Path.lstat
+    changed_calls = 0
 
     def linked_lstat(path: Path) -> os.stat_result | SimpleNamespace:
+        nonlocal changed_calls
         if path.name.startswith(".changed"):
+            changed_calls += 1
+            if changed_calls == 1:
+                raise FileNotFoundError()
             return SimpleNamespace(st_mode=stat.S_IFLNK)
         return original_lstat(path)
 

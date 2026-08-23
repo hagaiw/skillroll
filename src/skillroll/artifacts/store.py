@@ -228,6 +228,16 @@ class ArtifactStore:
             for _ in range(3):
                 candidate = directory / f".{name}.{uuid.uuid4().hex}.tmp"
                 try:
+                    candidate.lstat()
+                except FileNotFoundError:
+                    pass
+                except OSError as error:
+                    raise ArtifactError(
+                        "SkillRoll could not safely inspect a temporary evidence file."
+                    ) from error
+                else:
+                    continue
+                try:
                     file_fd = os.open(
                         candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
                     )
