@@ -1,0 +1,6 @@
+{
+  "name": "harness-prompts",
+  "author": {"name": "SkillRoll"},
+  "description": "Dogfood skills for the three model-facing SkillRoll harness contracts.",
+  "version": "0.1.0"
+}

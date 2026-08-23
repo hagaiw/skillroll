@@ -1,0 +1,8 @@
+{
+  "name": "adopter-marketplace",
+  "owner": {"name": "Adopter Fixture"},
+  "description": "A small existing marketplace used by SkillRoll adoption tests.",
+  "plugins": [
+    {"name": "incident-tools", "source": "./plugins/incident-tools"}
+  ]
+}

@@ -1,0 +1,87 @@
+"""Pure renderers for the small files owned by ``skillroll init``."""
+
+from __future__ import annotations
+
+from pathlib import PurePosixPath
+
+
+def _toml_string(value: str) -> str:
+    """Encode a TOML basic string without letting data alter its structure."""
+    escaped: list[str] = []
+    for character in value:
+        escaped.append(
+            {
+                "\\": "\\\\",
+                '"': '\\"',
+                "\b": "\\b",
+                "\t": "\\t",
+                "\n": "\\n",
+                "\f": "\\f",
+                "\r": "\\r",
+            }.get(
+                character,
+                (
+                    f"\\u{ord(character):04x}"
+                    if ord(character) < 0x20 or ord(character) == 0x7F
+                    else character
+                ),
+            )
+        )
+    return '"' + "".join(escaped) + '"'
+
+
+def render_config(
+    skills_path: PurePosixPath,
+    *,
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key_env: str | None = None,
+) -> bytes:
+    """Render an intentionally minimal, hand-editable TOML configuration."""
+    lines = [
+        "schema_version = 1",
+        f"skills_path = {_toml_string(skills_path.as_posix())}",
+    ]
+    if base_url is not None and model is not None and api_key_env is not None:
+        lines.extend(
+            [
+                "",
+                "[inference]",
+                f"base_url = {_toml_string(base_url)}",
+                f"model = {_toml_string(model)}",
+                f"api_key_env = {_toml_string(api_key_env)}",
+            ]
+        )
+    return ("\n".join(lines) + "\n").encode()
+
+
+def render_ignore(existing: str | None) -> bytes:
+    """Add the one private run-artifact rule without touching other rules."""
+    if existing is None:
+        return b".skillroll/runs/\n"
+    lines = existing.splitlines()
+    if ".skillroll/runs/" in lines:
+        return existing.encode()
+    newline = "\r\n" if "\r\n" in existing else "\n"
+    suffix = "" if not existing or existing.endswith(("\n", "\r")) else newline
+    return (existing + suffix + ".skillroll/runs/" + newline).encode()
+
+
+def render_starter_case(name: str) -> bytes:
+    """Render one structurally valid but explicitly non-authoritative eval case."""
+    return (
+        f"# {name.replace('-', ' ').title()}\n\n"
+        "```skillroll\n"
+        "schema_version: 1\n"
+        "```\n\n"
+        "## Input\n\n"
+        "Replace this example with a realistic request and only the context a "
+        "main session would already know. Do not include the decision, workflow, "
+        "or expected answer.\n\n"
+        "## World\n\n"
+        "Replace this example with coherent external state and plausible action "
+        "results. Use it for facts outside the selected skill folder.\n\n"
+        "## Success criteria\n\n"
+        "- Replace this example with a short semantic description of good intent "
+        "and outcome; allow equivalent actions and wording.\n"
+    ).encode()

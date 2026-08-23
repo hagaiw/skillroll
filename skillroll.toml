@@ -1,0 +1,12 @@
+schema_version = 1
+skills_path = "plugins"
+
+[inference]
+base_url = "https://openrouter.ai/api/v1"
+model = "openai/gpt-4.1-nano"
+api_key_env = "SKILLROLL_API_KEY"
+
+[inference.limits]
+max_turns = 4
+timeout_seconds = 90
+max_output_tokens = 8192

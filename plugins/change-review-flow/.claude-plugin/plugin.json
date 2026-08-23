@@ -1,0 +1,7 @@
+{
+  "name": "change-review-flow",
+  "author": {"name": "SkillRoll"},
+  "description": "A small change-review flow built from independent steps.",
+  "version": "0.1.0",
+  "dependencies": [{"name": "flow-runner", "version": "=0.1.0"}]
+}

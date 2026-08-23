@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "skillroll"
+dynamic = ["version"]
+description = "Readable, execution-based evaluations for agent skills"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "SkillRoll contributors" }]
+dependencies = [
+  "markdown-it-py>=4.0",
+  "openai-agents>=0.21,<1",
+  "PyYAML>=6.0.3",
+]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+
+[project.scripts]
+skillroll = "skillroll.cli:entrypoint"
+
+[dependency-groups]
+dev = [
+  "coverage[toml]>=7.15",
+  "hatchling>=1.27",
+  "mypy>=2.3",
+  "pytest>=9.0",
+  "ruff>=0.15",
+  "hypothesis>=6.0",
+  "types-PyYAML>=6.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/skillroll"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"plugins/harness-prompts/skills/executor-prompt/references/system.md" = "skillroll/_harness_prompts/executor-prompt/references/system.md"
+"plugins/harness-prompts/skills/executor-prompt/references/omission.md" = "skillroll/_harness_prompts/executor-prompt/references/omission.md"
+"plugins/harness-prompts/skills/world-simulator-prompt/references/system.md" = "skillroll/_harness_prompts/world-simulator-prompt/references/system.md"
+"plugins/harness-prompts/skills/semantic-judge-prompt/references/system.md" = "skillroll/_harness_prompts/semantic-judge-prompt/references/system.md"
+
+[tool.hatch.version]
+path = "src/skillroll/_version.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/skillroll",
+  "plugins/harness-prompts/skills/executor-prompt/references/system.md",
+  "plugins/harness-prompts/skills/executor-prompt/references/omission.md",
+  "plugins/harness-prompts/skills/world-simulator-prompt/references/system.md",
+  "plugins/harness-prompts/skills/semantic-judge-prompt/references/system.md",
+  "LICENSE",
+  "README.md",
+  "pyproject.toml",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live and not external'"
+markers = [
+  "external: requires an optional executable or external integration",
+  "live: requires explicit credentials and may spend inference budget",
+]

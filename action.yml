@@ -1,0 +1,102 @@
+name: SkillRoll
+description: Validate and evaluate Agent Skills with the released Python harness.
+inputs:
+  mode:
+    description: validate or eval
+    required: true
+  scope:
+    description: changed, all, skill, or case
+    required: true
+  base-sha:
+    description: Immutable base commit for changed scope
+    required: false
+  head-sha:
+    description: Immutable head commit for changed scope
+    required: false
+  selection-path:
+    description: Skill or eval-case path for skill/case scope
+    required: false
+  reviewed-ref:
+    description: Exact reviewed SHA or refs/pull/NUMBER/head for validate-ref mode
+    required: false
+  run-commands:
+    description: Run declared repository checks after explicit trust
+    required: false
+    default: "false"
+  command-notice:
+    description: Explain when repository checks are intentionally not run
+    required: false
+    default: "false"
+  upload-artifact:
+    description: Upload redacted run evidence
+    required: false
+    default: "false"
+  artifact-retention-days:
+    description: Evidence retention in days
+    required: false
+    default: "7"
+  fork-notice:
+    description: Render maintainer instructions instead of a live-run claim
+    required: false
+    default: "false"
+outputs:
+  outcome:
+    description: PASS, FAIL, INCOMPLETE, or ERROR
+    value: ${{ steps.run.outputs.outcome }}
+  selected-case-count:
+    description: Number of selected eval cases
+    value: ${{ steps.run.outputs.selected-case-count }}
+  selection-reason:
+    description: Human-readable selection explanation
+    value: ${{ steps.run.outputs.selection-reason }}
+  artifact-path:
+    description: Relative run-evidence path when evaluation created one
+    value: ${{ steps.run.outputs.artifact-path }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - uses: astral-sh/setup-uv@v6
+    - id: run
+      shell: bash
+      env:
+        SKILLROLL_MODE: ${{ inputs.mode }}
+        SKILLROLL_SCOPE: ${{ inputs.scope }}
+        SKILLROLL_BASE_SHA: ${{ inputs.base-sha }}
+        SKILLROLL_HEAD_SHA: ${{ inputs.head-sha }}
+        SKILLROLL_SELECTION_PATH: ${{ inputs.selection-path }}
+        SKILLROLL_REVIEWED_REF: ${{ inputs.reviewed-ref }}
+        SKILLROLL_RUN_COMMANDS: ${{ inputs.run-commands }}
+        SKILLROLL_COMMAND_NOTICE: ${{ inputs.command-notice }}
+        SKILLROLL_UPLOAD_ARTIFACT: ${{ inputs.upload-artifact }}
+        SKILLROLL_RETENTION_DAYS: ${{ inputs.artifact-retention-days }}
+        SKILLROLL_FORK_NOTICE: ${{ inputs.fork-notice }}
+      run: |
+        set +e
+        uv run --project "$GITHUB_ACTION_PATH" --directory "$GITHUB_WORKSPACE" python -m skillroll.github_action \
+          --mode "$SKILLROLL_MODE" \
+          --scope "$SKILLROLL_SCOPE" \
+          --base-sha "$SKILLROLL_BASE_SHA" \
+          --head-sha "$SKILLROLL_HEAD_SHA" \
+          --selection-path "$SKILLROLL_SELECTION_PATH" \
+          --reviewed-ref "$SKILLROLL_REVIEWED_REF" \
+          --run-commands "$SKILLROLL_RUN_COMMANDS" \
+          --command-notice "$SKILLROLL_COMMAND_NOTICE" \
+          --upload-artifact "$SKILLROLL_UPLOAD_ARTIFACT" \
+          --artifact-retention-days "$SKILLROLL_RETENTION_DAYS" \
+          --fork-notice "$SKILLROLL_FORK_NOTICE"
+        status=$?
+        echo "exit-code=$status" >> "$GITHUB_OUTPUT"
+        exit 0
+    - if: always() && inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: skillroll-evidence-${{ github.run_id }}-${{ github.job }}
+        path: .skillroll/runs/
+        if-no-files-found: ignore
+        retention-days: ${{ inputs.artifact-retention-days }}
+    - if: always()
+      shell: bash
+      run: exit "${{ steps.run.outputs.exit-code }}"

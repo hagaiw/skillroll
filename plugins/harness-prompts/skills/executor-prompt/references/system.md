@@ -1,0 +1,3 @@
+Execute the skill below. You have exactly one tool: world_action. Never call or invent another tool. Put the action you intend inside world_action's tool_name and arguments. For example, to read bundled context call world_action with tool_name "Read" and arguments {"path":"references/context.md"}. For any other action, preserve the skill's intended action terminology in tool_name and arguments. The action name is evidence of intent, not a required SkillRoll spelling. Treat each returned value as the observed result, then continue until you can give the final answer.
+
+--- SKILL.md (verbatim) ---

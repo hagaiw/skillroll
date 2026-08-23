@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and rehearse
+    runs-on: ubuntu-latest
+    outputs:
+      publishable: ${{ steps.evidence.outputs.publishable }}
+    steps:
+      # actions/checkout v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.release.tag_name || github.sha }}
+          persist-credentials: false
+      # astral-sh/setup-uv v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+      # actions/setup-python v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-groups --locked
+      - run: uv run pytest -q
+      - name: Verify the published tag matches the canonical version
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: >-
+          uv run python -c "import os; from skillroll.release import
+          release_metadata; assert os.environ['RELEASE_TAG'] ==
+          release_metadata().tag"
+      - run: uv build --out-dir dist
+      - name: Verify wheel metadata before privileged handoff
+        run: >-
+          uv run python -c "from pathlib import Path; import zipfile;
+          from skillroll import __version__; wheel = next(Path('dist').glob('*.whl'));
+          archive = zipfile.ZipFile(wheel); metadata = next(name for name in
+          archive.namelist() if name.endswith('.dist-info/METADATA'));
+          assert f'Version: {__version__}' in archive.read(metadata).decode()"
+      - id: evidence
+        name: Create local evidence and check release gates
+        shell: bash
+        run: |
+          set +e
+          uv run python tools/release_rehearsal.py \
+            --root . --artifacts dist --output release-evidence \
+            --commit "${GITHUB_SHA}"
+          status="$?"
+          if [ "$status" -eq 0 ]; then
+            echo "publishable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publishable=false" >> "$GITHUB_OUTPUT"
+            echo "Release rehearsal is BLOCKED; nothing was published."
+          fi
+      - name: Verify generated checksum manifest before handoff
+        run: >-
+          uv run python -c "from pathlib import Path; from skillroll.release
+          import verify_artifact_manifest; assert not verify_artifact_manifest(
+          Path('release-evidence/SHA256SUMS.json').read_bytes(), Path('dist'))"
+      # actions/upload-artifact v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-evidence
+          path: |
+            dist
+            release-evidence
+          if-no-files-found: error
+
+  attest:
+    name: Attest release artifacts
+    if: >-
+      github.event_name == 'release' &&
+      needs.build.outputs.publishable == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      # actions/download-artifact v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: release-evidence
+      # actions/attest v4
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: dist/*
+
+  publish-pypi:
+    name: Publish to PyPI
+    if: >-
+      github.event_name == 'release' &&
+      needs.build.outputs.publishable == 'true'
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      # actions/download-artifact v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: release-evidence
+      # pypa/gh-action-pypi-publish release/v1
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+        with:
+          packages-dir: dist

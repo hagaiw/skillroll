@@ -1,0 +1,12 @@
+schema_version = 1
+version = "0.1.0"
+
+[[gates]]
+name = "installed-live-e2e"
+state = "PASS"
+detail = "The installed wheel passed the bounded two-case OpenRouter E2E on 2026-08-16: deterministic missing evidence failed and the generative-world happy path passed."
+
+[[gates]]
+name = "claude-dependency-install"
+state = "PASS"
+detail = "Claude Code 2.1.223 installed change-review-flow and its exact-tagged flow-runner dependency in an isolated candidate repository and configuration directory on 2026-08-16."
