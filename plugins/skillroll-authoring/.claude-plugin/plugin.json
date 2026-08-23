@@ -2,5 +2,5 @@
   "name": "skillroll-authoring",
   "author": {"name": "SkillRoll"},
   "description": "Help authors set up SkillRoll and write bounded evals.",
-  "version": "0.1.1"
+  "version": "0.1.0"
 }

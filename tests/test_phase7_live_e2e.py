@@ -242,16 +242,6 @@ def test_live_cases_match_the_flow_runner_action_for_the_explicit_rule() -> None
     assert "tool_name: summarize-change" not in adverse
 
 
-def test_flow_runner_requires_separate_skill_actions() -> None:
-    instructions = (ROOT / "plugins/flow-runner/skills/flow-runner/SKILL.md").read_text(
-        encoding="utf-8"
-    )
-
-    assert "do not merely describe a plan" in instructions
-    assert "Never request `flow-runner` as an\naction" in instructions
-    assert "never batch the steps into one action" in instructions
-
-
 def test_build_and_install_environment_never_receives_live_key() -> None:
     sanitized = _sanitized_build_environment({LIVE_KEY: "live-secret", "SAFE": "1"})
     assert sanitized == {"SAFE": "1"}

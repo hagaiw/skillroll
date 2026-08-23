@@ -2,5 +2,5 @@
   "name": "flow-runner",
   "author": {"name": "SkillRoll"},
   "description": "Coordinate a small sequence of artifact-producing skills.",
-  "version": "0.1.1"
+  "version": "0.1.0"
 }
