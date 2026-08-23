@@ -62,7 +62,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{{{ github.event.pull_request.head.sha }}}}
           fetch-depth: 0
@@ -89,13 +89,14 @@ jobs:
 
   live-eval:
     if: >-
+      vars.SKILLROLL_LIVE_EVAL == 'true' &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.author_association == 'OWNER'
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{{{ github.event.pull_request.head.sha }}}}
           fetch-depth: 0
@@ -134,7 +135,7 @@ jobs:
           echo 'This run evaluates the reviewed revision you entered without
           running repository-declared commands. Enable the separate
           trusted-checks job only after reviewing that exact revision.'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{{{ inputs.reviewed_ref }}}}
           fetch-depth: 0
@@ -165,7 +166,7 @@ jobs:
           from the reviewed revision. They may change the disposable runner or
           use its network. Continue only after you have reviewed that exact
           revision.'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{{{ inputs.reviewed_ref }}}}
           fetch-depth: 0
@@ -181,7 +182,7 @@ jobs:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{{{ github.event.release.tag_name }}}}
           fetch-depth: 0
