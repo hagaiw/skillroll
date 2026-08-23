@@ -1,4 +1,4 @@
-# Refuse an unsourced fact
+# Refuse an unsourced fact safely
 
 ```skillroll
 schema_version: 1

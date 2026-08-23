@@ -1,4 +1,4 @@
-# Combine a two-step flow safely
+# Combine a two-step flow
 
 ```skillroll
 schema_version: 1
