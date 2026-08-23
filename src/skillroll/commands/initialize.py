@@ -33,13 +33,11 @@ from skillroll.repository_io import current_directory
 
 _ENVIRONMENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-# OpenRouter's free router is an onboarding convenience, not a provider-specific
-# runtime adapter. The production path still validates the resulting generic
-# OpenAI-compatible profile before it spends an evaluation request.
+# OpenRouter's free router is an explicit setup check, not a provider-specific
+# runtime adapter or a stable evaluation model.
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "openrouter/free"
-DEFAULT_OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
-DEFAULT_GENERIC_API_KEY_ENV = "SKILLROLL_API_KEY"
+DEFAULT_API_KEY_ENV = "SKILLROLL_API_KEY"
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,8 +93,8 @@ def _choose_path(
     answer = _ask(
         input_stream,
         output_stream,
-        f"Use {suggestion.as_posix()!r} as the folder to scan? "
-        "Press Enter to accept, or type a different relative path:",
+        f"Use {suggestion.as_posix()!r} as the skills folder? "
+        "Press Enter to accept, or enter another relative path:",
     )
     return answer or suggestion.as_posix()
 
@@ -139,7 +137,7 @@ def _ask_optional_setup(
             options,
             base_url=DEFAULT_OPENROUTER_BASE_URL,
             model=DEFAULT_OPENROUTER_MODEL,
-            api_key_env=options.api_key_env or DEFAULT_OPENROUTER_API_KEY_ENV,
+            api_key_env=options.api_key_env or DEFAULT_API_KEY_ENV,
         )
     if options.yes:
         return options
@@ -153,32 +151,19 @@ def _ask_optional_setup(
         and _ask(
             input_stream,
             output_stream,
-            "Add model endpoint settings now? [Y/n] (default: OpenRouter free; "
-            "sends skill/eval text to a third-party endpoint)",
+            "Connect an OpenAI-compatible model now? [y/N]",
         ).lower()
-        in {"", "y", "yes"}
+        in {"y", "yes"}
     ):
-        base_url = (
-            _ask(
-                input_stream,
-                output_stream,
-                f"Endpoint URL [{DEFAULT_OPENROUTER_BASE_URL}]:",
-            )
-            or DEFAULT_OPENROUTER_BASE_URL
+        base_url = _ask(
+            input_stream,
+            output_stream,
+            "Endpoint URL:",
         )
-        model = (
-            _ask(
-                input_stream,
-                output_stream,
-                f"Model name [{DEFAULT_OPENROUTER_MODEL}]:",
-            )
-            or DEFAULT_OPENROUTER_MODEL
-        )
-        default_api_key_env = (
-            DEFAULT_OPENROUTER_API_KEY_ENV
-            if base_url == DEFAULT_OPENROUTER_BASE_URL
-            and model == DEFAULT_OPENROUTER_MODEL
-            else DEFAULT_GENERIC_API_KEY_ENV
+        model = _ask(
+            input_stream,
+            output_stream,
+            "Model name:",
         )
         chosen = replace(
             chosen,
@@ -188,15 +173,13 @@ def _ask_optional_setup(
                 _ask(
                     input_stream,
                     output_stream,
-                    f"API-key environment-variable name [{default_api_key_env}]:",
+                    f"API-key environment-variable name [{DEFAULT_API_KEY_ENV}]:",
                 )
-                or default_api_key_env
+                or DEFAULT_API_KEY_ENV
             ),
         )
     if chosen.starter_evals is None and (
-        _ask(
-            input_stream, output_stream, "Create two editable starter cases now? [y/N]"
-        ).lower()
+        _ask(input_stream, output_stream, "Create two starter evals? [y/N]").lower()
         in {"y", "yes"}
     ):
         locations = ", ".join(skill.directory.as_posix() for skill in skills)
@@ -205,7 +188,7 @@ def _ask_optional_setup(
             starter_evals=_ask(
                 input_stream,
                 output_stream,
-                f"Which skill folder should receive them? Available: {locations}",
+                f"Which skill should receive them? Available: {locations}",
             ),
         )
     return chosen
@@ -313,8 +296,8 @@ def run(
                     )
                 return CommandResult(
                     Outcome.PASS,
-                    "SkillRoll added a GitHub workflow. Add the named repository "
-                    "secret before a live evaluation can run.",
+                    "Added .github/workflows/skillroll.yml. Add the configured API "
+                    "key as a repository secret before running evals.",
                     data={
                         "repository_root": ".",
                         "changed_paths": tuple(
@@ -325,8 +308,7 @@ def run(
                 )
             return CommandResult(
                 Outcome.PASS,
-                "This repository is already configured; SkillRoll did not "
-                "change any files.",
+                "SkillRoll is already set up. No files changed.",
                 data={"repository_root": ".", "changed_paths": ()},
             )
         return CommandResult(
@@ -423,7 +405,7 @@ def run(
             "Supply --base-url HTTPS_URL --model MODEL; optionally add "
             "--api-key-env SAFE_NAME.",
         )
-    key_name = api_key_env or (DEFAULT_GENERIC_API_KEY_ENV if has_endpoint else None)
+    key_name = api_key_env or (DEFAULT_API_KEY_ENV if has_endpoint else None)
     if options.action_ref is not None and not options.github_workflow:
         return _error(
             "An Action reference is only used when creating the GitHub workflow.",
@@ -495,8 +477,7 @@ def run(
     changed = tuple(_relative(root, path) for path in result.changed)
     return CommandResult(
         Outcome.PASS,
-        "SkillRoll created setup files. It did not contact a model endpoint "
-        "or run repository code.",
+        "SkillRoll is ready. No model or repository command was run.",
         data={
             "repository_root": ".",
             "skills_path": parsed_path.as_posix(),

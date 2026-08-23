@@ -14,7 +14,7 @@ from conftest import run_module
 from skillroll import cli
 from skillroll.commands import doctor, evaluate, initialize
 from skillroll.commands.initialize import (
-    DEFAULT_OPENROUTER_API_KEY_ENV,
+    DEFAULT_API_KEY_ENV,
     DEFAULT_OPENROUTER_BASE_URL,
     DEFAULT_OPENROUTER_MODEL,
     InitOptions,
@@ -49,6 +49,37 @@ class TerminalOutput(io.StringIO):
         return True
 
 
+def test_missing_or_empty_setup_mascot_does_not_block_init(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class MissingMascot:
+        def joinpath(self, *_: str) -> MissingMascot:
+            return self
+
+        def read_text(self, *, encoding: str) -> str:
+            del encoding
+            raise OSError("missing")
+
+    monkeypatch.setattr(cli.resources, "files", lambda _: MissingMascot())
+    assert cli._setup_mascot() == ""
+
+    repository = tmp_path / "repository"
+    make_skill(repository)
+    output = TerminalOutput()
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(cli, "_setup_mascot", lambda: "")
+
+    assert (
+        cli.main(
+            ["init", "--repo", str(repository), "--skills-path", "skills"],
+            stdout=output,
+        )
+        == 0
+    )
+    assert output.getvalue().startswith("PASS — SkillRoll is ready.")
+
+
 def test_fresh_interactive_init_displays_packaged_mascot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -67,7 +98,7 @@ def test_fresh_interactive_init_displays_packaged_mascot(
     )
     rendered = output.getvalue()
     assert "\x1b[" in rendered
-    assert "SkillRoll created setup files" in rendered
+    assert "SkillRoll is ready" in rendered
 
 
 def test_setup_mascot_stays_out_of_noninteractive_and_json_output(
@@ -124,9 +155,9 @@ def test_init_creates_minimal_local_files_and_templates(tmp_path: Path) -> None:
     assert (repository / ".gitignore").read_text(
         encoding="utf-8"
     ) == ".skillroll/runs/\n"
-    assert "Replace this example" in (skill / "evals" / "first-use.eval.md").read_text(
-        encoding="utf-8"
-    )
+    starter = (skill / "evals" / "first-use.eval.md").read_text(encoding="utf-8")
+    assert "Write a realistic request" in starter
+    assert "Dungeon Master" in starter
 
 
 def test_init_is_idempotent_and_never_replaces_configuration(tmp_path: Path) -> None:
@@ -188,7 +219,7 @@ def test_init_adds_generic_inference_without_accessing_a_key(tmp_path: Path) -> 
     )
     assert result.outcome is Outcome.PASS
     content = (repository / "skillroll.toml").read_text(encoding="utf-8")
-    assert "SKILLROLL_API_KEY" in content
+    assert DEFAULT_API_KEY_ENV in content
     assert "secret" not in content
 
 
@@ -208,7 +239,7 @@ def test_init_explicitly_adds_openrouter_free_without_accessing_a_key(
     assert configured.inference is not None
     assert configured.inference.base_url == DEFAULT_OPENROUTER_BASE_URL
     assert configured.inference.model == DEFAULT_OPENROUTER_MODEL
-    assert configured.inference.api_key_env == DEFAULT_OPENROUTER_API_KEY_ENV
+    assert configured.inference.api_key_env == DEFAULT_API_KEY_ENV
     custom = tmp_path / "custom-key"
     make_skill(custom)
     custom_result = run(
@@ -405,7 +436,7 @@ def test_interactive_optional_setup_has_flag_equivalent_choices() -> None:
     )
     assert prompted.base_url == "https://example.test/v1"
     assert prompted.model == "model"
-    assert prompted.api_key_env == "SKILLROLL_API_KEY"
+    assert prompted.api_key_env == DEFAULT_API_KEY_ENV
     assert prompted.starter_evals == "review"
     unchanged = initialize._ask_optional_setup(
         InitOptions(yes=True),
@@ -433,13 +464,12 @@ def test_interactive_optional_setup_has_flag_equivalent_choices() -> None:
         InitOptions(starter_evals="review"),
         skills,
         interactive=True,
-        input_stream=io.StringIO("\n\n\n\n"),
+        input_stream=io.StringIO("\n"),
         output_stream=defaults_output,
     )
-    assert defaults.base_url == DEFAULT_OPENROUTER_BASE_URL
-    assert defaults.model == DEFAULT_OPENROUTER_MODEL
-    assert defaults.api_key_env == DEFAULT_OPENROUTER_API_KEY_ENV
-    assert "third-party endpoint" in defaults_output.getvalue()
+    assert defaults == InitOptions(starter_evals="review")
+    assert "OpenAI-compatible model" in defaults_output.getvalue()
+    assert "OpenRouter" not in defaults_output.getvalue()
     declined = initialize._ask_optional_setup(
         InitOptions(starter_evals="review"),
         skills,

@@ -91,13 +91,10 @@ def skipped_check(request: CheckRequest) -> CheckResult:
         f"{request.case.identity.as_posix()} was not run.\n\n"
         "It would run this command in this repository:\n"
         f"{request.check.command}\n\n"
-        "Why SkillRoll paused: this command is repository code. Like any command "
-        "you run in a terminal, it could change files, use the network, or access "
-        "accounts available on this computer. SkillRoll does not run it until you "
-        "say this repository is trusted.\n\n"
-        "The configured inference key is not passed to this command, but other local "
-        "files or credentials could still be available.\n\n"
-        "If you trust this repository and want to run the check, use:\n"
+        "SkillRoll paused because repository commands can change files, use the "
+        "network, or access local accounts. The model key is removed, but other "
+        "files and credentials may still be available.\n\n"
+        "After you review and trust this repository, run:\n"
         f"{action}"
     )
     return CheckResult(request.check, "SKIPPED", None, "", "", None, detail)

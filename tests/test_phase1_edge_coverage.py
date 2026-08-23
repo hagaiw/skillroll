@@ -572,7 +572,7 @@ def test_validation_reports_disabled_policy_in_direct_summary(tmp_path: Path) ->
     skill = make_skill(root)
     (skill.evals_directory / "one.eval.md").write_text(case_source(), encoding="utf-8")
     result = command_result(validate_repository(root))
-    assert "Disabled policy guards: SCG2001." in result.summary
+    assert "Disabled guards: SCG2001." in result.summary
 
 
 def test_validation_reports_each_disabled_policy_once(tmp_path: Path) -> None:

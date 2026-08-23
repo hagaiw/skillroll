@@ -204,16 +204,19 @@ def command_result(report: ValidationReport) -> CommandResult:
     )
     if not disabled and report.config is not None:
         disabled = tuple(sorted(report.config.guards.disabled))
+    skill_noun = "skill" if len(report.skills) == 1 else "skills"
+    eval_noun = "eval" if len(report.cases) == 1 else "evals"
     summary = (
-        f"Found {len(report.skills)} skills and {len(report.cases)} runnable eval "
-        "cases."
+        f"Validated {len(report.skills)} {skill_noun} and "
+        f"{len(report.cases)} {eval_noun}."
         if outcome is Outcome.PASS
-        else "SkillRoll found a problem that prevents this evaluation from running."
+        else "Validation found a problem."
     )
     if advice:
-        summary += f" Advice: {len(advice)} item(s) do not block evaluation."
+        noun = "suggestion" if len(advice) == 1 else "suggestions"
+        summary += f" {len(advice)} {noun}."
     if disabled:
-        summary = f"{summary} Disabled policy guards: {', '.join(disabled)}."
+        summary = f"{summary} Disabled guards: {', '.join(disabled)}."
     data: dict[str, JSONValue] = {
         "skills": tuple(skill.identity.as_posix() for skill in report.skills),
         "cases": tuple(case.identity.as_posix() for case in report.cases),

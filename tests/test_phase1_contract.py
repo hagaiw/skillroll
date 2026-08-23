@@ -79,7 +79,7 @@ def test_validate_selection_and_disabled_policy_are_visible(tmp_path: Path) -> N
     (repository / "skills" / "review" / "evals" / "edge.eval.md").unlink()
     completed = run_module("validate", "--repo", str(repository), "--skill", "review")
     assert completed.returncode == 0
-    assert "Disabled policy guards: SCG2001" in completed.stdout
+    assert "Disabled guards: SCG2001" in completed.stdout
     incompatible = run_module(
         "validate", "--repo", str(repository), "--skill", "review", "--case", "x"
     )

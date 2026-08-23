@@ -343,7 +343,7 @@ def render_summary(
                 "",
                 f"Evidence was uploaded for {retention_days} day(s). It is "
                 "redacted, but may include skill input, world text, final output, "
-                "and bounded repository-check output.",
+                "and limited repository-check output.",
             )
         )
     return "\n".join(lines) + "\n"

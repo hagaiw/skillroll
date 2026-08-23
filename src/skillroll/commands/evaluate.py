@@ -171,11 +171,6 @@ def _world_usage(
     }
 
 
-def _one_line(value: str) -> str:
-    """Collapse model-authored prose for stable terminal rendering."""
-    return " ".join(value.split())
-
-
 def _judge_data(
     judged: JudgeResult | None, requested_model: str
 ) -> dict[str, object] | None:
@@ -229,46 +224,48 @@ def _overall_text(
     failure: InferenceFailure | None,
 ) -> tuple[str, str]:
     if failure is not None:
-        stage = failure.stage or failure.kind.value.replace("_", " ")
+        raw_stage = failure.stage or failure.kind.value
+        stage = {
+            "preflight": "checking the model connection",
+            "execution": "running the skill",
+            "world": "simulating the World",
+            "semantic_judgment": "checking the success criteria",
+            "evidence_writing": "saving the report",
+        }.get(raw_stage, raw_stage.replace("_", " "))
         return (
-            f"The evaluation stopped during {stage}: {failure.summary}",
-            "Inspect the technical stage and rerun the case after fixing that cause.",
+            f"The eval stopped while {stage}: {failure.summary}",
+            "Fix the reported problem, then run the eval again.",
         )
     if judged is None:
         return (
-            "The skill finished, but semantic judgment was not available.",
-            "Inspect the semantic-judgment evidence and rerun the case.",
+            "The skill finished, but SkillRoll could not check the success criteria.",
+            "Inspect the report and rerun the case.",
         )
     if judged.verdict == "FAIL":
         return (
-            "The semantic judge rejected the observed behavior against the "
-            "Success criteria.",
+            "The skill did not meet the success criteria.",
             "Review the unmet criteria and the transcript before changing the "
             "skill or eval.",
         )
     if any(not item.passed for item in assertions):
         return (
-            "The semantic judgment was accepted, but an exact final-output fact "
-            "check did not pass.",
-            "Review the exact fact-check evidence and decide whether the fact or "
+            "The skill met the success criteria, but an exact output check failed.",
+            "Review the exact-check evidence and decide whether the check or "
             "the skill's final response needs correction.",
         )
     if any(item.outcome == "SKIPPED" for item in checks):
         return (
-            "The semantic judgment was accepted, but one or more trusted "
-            "repository checks were not run.",
-            "Run the listed trusted commands explicitly if their results are required.",
+            "The skill met the success criteria, but a repository check did not run.",
+            "Run the listed command explicitly if its result is required.",
         )
     if any(item.outcome in {"FAIL", "ERROR"} for item in checks):
         return (
-            "The semantic judgment was accepted, but a trusted repository check "
-            "did not pass.",
-            "Inspect the trusted-check evidence and fix the checked artifact or "
-            "command.",
+            "The skill met the success criteria, but a repository check failed.",
+            "Inspect the check log and fix the artifact or command.",
         )
     return (
-        "The skill finished and the observed behavior met the Success criteria.",
-        "Keep the case as evidence and record the model and usage baseline.",
+        "The skill met every success criterion.",
+        "Keep this eval as regression coverage.",
     )
 
 
@@ -370,7 +367,7 @@ def _result_summary(
         if failure is not None
         else None
         if check_failure is None
-        else check_failure.detail or "A trusted repository check could not finish."
+        else check_failure.detail or "A repository check could not finish."
     )
     technical_details = (
         failure.details
@@ -849,33 +846,25 @@ def _outcome_counts(values: tuple[CaseResult, ...]) -> dict[str, int]:
 
 def _control_interpretation(skill: CaseResult, control: CaseResult | None) -> str:
     if control is None:
-        return "Sampling was requested without a skill-omission control."
+        return "Samples were run without the optional no-skill comparison."
     if skill.outcome in {"ERROR", "INCOMPLETE"} or control.outcome in {
         "ERROR",
         "INCOMPLETE",
     }:
         return (
             "The comparison is inconclusive because one or both runs did not "
-            "produce a trustworthy semantic result."
+            "produce a trustworthy result."
         )
     if skill.outcome == "PASS" and control.outcome == "FAIL":
-        return (
-            "This sample distinguishes the selected skill from an omitted-skill "
-            "control."
-        )
+        return "This sample passed with the skill and failed without it."
     if control.outcome == "PASS":
         return (
-            "This case passed without the selected skill; Input, World, criteria, "
+            "This case passed without the skill; Input, World, criteria, "
             "or general model behavior may be carrying the result."
         )
     if skill.outcome == "FAIL":
-        return (
-            "This sample does not yet demonstrate successful selected-skill behavior."
-        )
-    return (
-        "The selected skill passed, but the omission control did not produce a "
-        "clear comparison."
-    )
+        return "The skill did not pass this sample."
+    return "The skill passed, but the no-skill run did not produce a clear comparison."
 
 
 def _experiment_usage(
@@ -913,7 +902,7 @@ def _experiment_interpretation(
         return {
             "status": "sampling_only",
             "explanation": (
-                "Independent samples were collected without an omission control."
+                "Independent samples were collected without a no-skill comparison."
             ),
             "next_action": (
                 "Inspect outcome variance and add --with-skill-control before "
@@ -924,22 +913,19 @@ def _experiment_interpretation(
         return {
             "status": "technically_inconclusive",
             "explanation": (
-                "At least one selected-skill or omission-control run did not "
+                "At least one skill or no-skill run did not "
                 "produce trustworthy evidence."
             ),
             "next_action": (
-                "Fix the technical stage or the World/limit setup, then repeat "
-                "the complete experiment."
+                "Fix the technical error or World setup, then run the comparison again."
             ),
         }
     if not any(item.outcome == "PASS" for item in skill):
         return {
             "status": "skill_not_ready",
-            "explanation": (
-                "No sampled selected-skill run passed its semantic and exact checks."
-            ),
+            "explanation": ("The skill did not pass any sample."),
             "next_action": (
-                "Inspect the selected-skill transcripts and criteria before "
+                "Inspect the transcripts and criteria before "
                 "changing the control or raising the model."
             ),
         }
@@ -953,8 +939,7 @@ def _experiment_interpretation(
         return {
             "status": "consistent_discrimination",
             "explanation": (
-                "Every sampled selected-skill run passed while its paired "
-                "omission control failed."
+                "Every sample passed with the skill and failed without it."
             ),
             "next_action": (
                 "Review the paired evidence and record the model, cost, and "
@@ -982,10 +967,10 @@ def _experiment_interpretation(
     return {
         "status": "no_observed_discrimination",
         "explanation": (
-            "The selected-skill samples did not outperform their omission controls."
+            "The samples did not perform better with the skill than without it."
         ),
         "next_action": (
-            "Review Input, World, criteria, and judge assessments for leakage or "
+            "Review Input, World, and success criteria for leaked answers or "
             "an overly general task."
         ),
     }
@@ -1175,7 +1160,7 @@ def run(
     if samples < 1 or samples > 10:
         return CommandResult(
             Outcome.ERROR,
-            "SkillRoll could not start the authoring experiment.",
+            "SkillRoll could not start the comparison.",
             (
                 Diagnostic(
                     "SCE2001",
@@ -1336,18 +1321,25 @@ def run(
             for item in case_results
         ),
     }
-    summary_text = (
-        (
-            f"Collected {samples} sample{'s' if samples != 1 else ''} for "
-            f"{len(case_results)} selected-skill run"
-            f"{'s' if len(case_results) != 1 else ''}: "
+    if len(case_results) == 1 and experiment is None:
+        case_result = case_results[0]
+        summary_text = {
+            "PASS": " met every success criterion.",
+            "FAIL": " missed at least one success criterion.",
+            "INCOMPLETE": " needs a repository check that did not run.",
+            "ERROR": " could not produce a trustworthy result.",
+        }[case_result.outcome]
+        summary_text = case_result.case.identity.as_posix() + summary_text
+    else:
+        counts = (
+            ("passed", outcome_counts["PASS"]),
+            ("failed", outcome_counts["FAIL"]),
+            ("incomplete", outcome_counts["INCOMPLETE"]),
+            ("errors", outcome_counts["ERROR"]),
         )
-        if experiment is not None
-        else (
-            f"Evaluated {len(case_results)} case"
-            f"{'s' if len(case_results) != 1 else ''}: "
-        )
-    )
+        count_text = ", ".join(f"{count} {label}" for label, count in counts if count)
+        subject = "sampled runs" if experiment is not None else "evals"
+        summary_text = f"Ran {len(case_results)} {subject}: {count_text}."
     if experiment is not None:
         report_text = (
             " Report: " + experiment.artifact_directory.as_posix() + "/report.md."
@@ -1365,21 +1357,9 @@ def run(
             if len(report_paths) == 1
             else f" Reports: {len(report_paths)} run folders under .skillroll/runs/."
         )
-    judge_text = (
-        f" Judge: {_one_line(case_results[0].judge.rationale)}"
-        if experiment is None
-        and len(case_results) == 1
-        and case_results[0].judge is not None
-        else ""
-    )
     return CommandResult(
         outcome,
         summary_text
-        + f"{outcome_counts['PASS']} overall pass, "
-        + f"{outcome_counts['FAIL']} fail, "
-        + f"{outcome_counts['INCOMPLETE']} incomplete, "
-        + f"{outcome_counts['ERROR']} error."
-        + judge_text
         + (
             " Parent experiment: " + experiment.artifact_directory.as_posix() + "."
             if experiment is not None

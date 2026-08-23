@@ -54,14 +54,6 @@ The current documentation corrects the existing timeout fact. Read the book
 and current source, then update the existing record so only the current
 verified value is active. Preserve the record ID and source trail.
 
-This eval exposes one `world_action` tool. Read `FACTS.md` and then exactly
-`https://example.test/current-docs#timeouts`—not the old source URL. Read
-`references/context.md` before writing, then use `Write` with complete
-replacement `content`. Preserve the session metadata and exactly one canonical
-`R-005` record. Keep `Status: active`, set `Updated` and `Last verified` to
-`2026-08-18`, replace the source and statement with the verified 30-second
-value, and do not leave the old 60-second wording in the book.
-
 ## World
 
 `FACTS.md` contains `R-005`:

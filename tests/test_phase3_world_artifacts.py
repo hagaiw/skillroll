@@ -504,7 +504,7 @@ def test_hash_records_and_renderers_are_stable(tmp_path: Path) -> None:
     )
     assert json.loads(run_bytes(facts))["repository_root"] == "."
     assert b'"source":"world_model"' in transcript_bytes((event(),))
-    assert b"has not judged" in report_bytes(facts)
+    assert b"has not been checked" in report_bytes(facts)
     assert canonical_json({"a": 1}).endswith(b"\n")
 
 
@@ -534,7 +534,7 @@ def test_hash_and_record_error_or_optional_branches(tmp_path: Path) -> None:
     assert record["failure"] == "broken"
     assert record["failure_details"] == ["network timeout [redacted]"]
     rendered = report_bytes(facts)
-    assert b"history window" in rendered and b"What prevented completion" in rendered
+    assert b"history limit" in rendered and b"Why the run stopped" in rendered
     assert b"Technical details" in rendered
     empty = RunFacts(
         "id", "time", "skill", "case", None, "url", "model", {}, {}, "x", "executed", ()

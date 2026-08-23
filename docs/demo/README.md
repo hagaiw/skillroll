@@ -2,9 +2,10 @@
 
 The README demo assumes SkillRoll is already configured in the current skills
 repository. An existing `ship-pr` skill needs a durable check against merging
-while required CI is still running. The author creates `wait-for-ci`, fills
-`Input`, `World`, and `Success criteria` in a terminal editor, and runs the case
-successfully. Provider setup is intentionally outside the story.
+while required CI is still running. The author creates `wait-for-ci`, describes
+the request in `Input`, the situation for the Dungeon Master in `World`, and
+the expected behavior in `Success criteria`. Provider setup is intentionally
+outside the story.
 
 The animation uses SkillRoll's real command names and result wording. The run
 identifier, incident text, and report excerpt are illustrative so the asset can

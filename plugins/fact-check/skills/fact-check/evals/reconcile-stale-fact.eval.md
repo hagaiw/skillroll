@@ -53,14 +53,6 @@ assertions:
 Reconcile the cache-key fact in the existing book against the current source.
 Keep the history understandable and report which fact is safe to use now.
 
-This eval exposes one `world_action` tool. Read `FACTS.md` and then
-`release-4.2.md`, read `references/context.md` before the first record write,
-and then call `Write` with `path` and complete replacement `content`. Do not
-finish with a plan. Use the canonical Markdown record shape. Preserve the
-session metadata, mark `R-001` as `superseded`, add one active replacement with
-`Supersedes: R-001`, and use the current date `2026-08-18` for the replacement
-record's lifecycle fields.
-
 ## World
 
 The existing book has this active record, last verified on 2025-12-01:

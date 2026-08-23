@@ -1,12 +1,12 @@
 {
   "name": "skillroll",
   "owner": {"name": "SkillRoll"},
-  "description": "A small public marketplace that demonstrates evaluated agent skills.",
+  "description": "A drop-in eval harness for Agent Skills: describe behavior in Markdown and let a Dungeon Master simulate the world.",
   "plugins": [
+    {"name": "skillroll-authoring", "source": "./plugins/skillroll-authoring"},
     {"name": "flow-runner", "source": "./plugins/flow-runner"},
     {"name": "change-review-flow", "source": "./plugins/change-review-flow"},
     {"name": "pr-overview", "source": "./plugins/pr-overview"},
-    {"name": "skillroll-authoring", "source": "./plugins/skillroll-authoring"},
     {"name": "fact-check", "source": "./plugins/fact-check"},
     {"name": "harness-prompts", "source": "./plugins/harness-prompts"}
   ]

@@ -20,7 +20,7 @@ def test_init_without_skills_is_actionable(tmp_path: Path) -> None:
     assert process.stdout == ""
     assert "SC0001" not in process.stderr
     assert "did not find any SKILL.md" in process.stderr
-    assert "What to do next:" in process.stderr
+    assert "Next:" in process.stderr
 
 
 def test_json_result_uses_stdout_only(tmp_path: Path) -> None:
@@ -122,7 +122,7 @@ def test_unexpected_handler_exception_is_normalized_without_traceback() -> None:
     exit_code = main(["eval"], stdout=stdout, stderr=stderr, commands={"eval": broken})
     assert exit_code == 3
     assert stdout.getvalue() == ""
-    assert "SC0004" not in stderr.getvalue()
+    assert "[SC0004]" in stderr.getvalue()
     assert "private implementation detail" not in stderr.getvalue()
     assert "Traceback" not in stderr.getvalue()
 

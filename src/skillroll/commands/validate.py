@@ -145,8 +145,11 @@ def run(
             ),
             base.data,
         )
+    skill_noun = "skill" if len(report.skills) == 1 else "skills"
+    check_noun = "repository check" if len(checks) == 1 else "repository checks"
     return CommandResult(
         Outcome.PASS,
-        f"Checked {len(report.skills)} skills and ran {len(checks)} repository checks.",
+        f"Validated {len(report.skills)} {skill_noun} and ran "
+        f"{len(checks)} {check_noun}.",
         data=base.data,
     )

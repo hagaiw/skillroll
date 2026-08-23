@@ -98,4 +98,4 @@ def test_dogfood_declared_renderer_check_runs_when_explicitly_permitted() -> Non
     result = validate.run(repo=str(ROOT), run_commands=True)
 
     assert result.outcome is Outcome.PASS
-    assert result.summary == "Checked 13 skills and ran 3 repository checks."
+    assert result.summary == "Validated 13 skills and ran 3 repository checks."

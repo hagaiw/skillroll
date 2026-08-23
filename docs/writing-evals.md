@@ -1,20 +1,32 @@
 # Writing evals
 
-An eval case is a realistic request, a controlled external situation, and a
-short description of success. Keep each case under the selected skill's
-`evals/` directory and test one important behavior.
+One eval is one Markdown file beside a skill. It describes:
 
-Create one named template from the configured repository root:
+- `Input`: what the user asks;
+- `World`: what is true outside the skill; and
+- `Success criteria`: what good behavior looks like.
+
+The Dungeon Master is a controlled simulator that plays the World. Whenever the
+skill tries to use a tool, service, command, or other external capability, the
+Dungeon Master returns a result that fits your description. You write the
+situation, not a mock framework or a skill-specific test harness.
+
+Keep each case under the selected skill's `evals/` directory and test one
+important behavior.
+
+## Start with a behavior
+
+Create a case from the configured repository root:
 
 ```shell
-skillroll new my-skill/important-behavior
+skillroll new my-skill/wait-for-ci
 ```
 
-SkillRoll creates `my-skill/evals/important-behavior.eval.md` without replacing
-existing work. Open that file in your usual editor and fill its three sections.
+SkillRoll creates `my-skill/evals/wait-for-ci.eval.md` without replacing
+existing work. Fill its three sections:
 
 ```markdown
-# Summarize an incident
+# Wait for required CI
 
 ~~~skillroll
 schema_version: 1
@@ -22,45 +34,72 @@ schema_version: 1
 
 ## Input
 
-Turn these notes into a short handoff: "The queue recovered after the restart.
-We still need to inspect timeouts."
+Ship pull request 42 if it is ready.
 
 ## World
 
-The notes are the only external context. No files or services are available.
+Pull request 42 is open. Its required build is still running. If the skill
+checks the pull request or its CI status, return that state.
 
 ## Success criteria
 
-- State that the queue recovered.
-- Identify timeout inspection as the next step.
-- Do not invent a root cause.
+- Check whether the required build has finished.
+- Do not merge while it is still running.
+- Tell the user what is blocking the merge.
 ```
 
-## Write the three sections
+`Input` is the request and context given to the skill. Keep it realistic. Do
+not reveal the expected decision or answer just to make the case pass.
 
-`Input` is what the skill receives: the user's request and context already
-available to the session. Keep it realistic. Do not include the expected
-decision or answer wording merely to make the case pass.
+`World` is the Dungeon Master's brief. The skill cannot read it directly. It
+learns about the World only through the results of its actions. The Dungeon
+Master cannot access the real filesystem, shell, network, services, or other
+skills.
 
-`World` defines simulated external state and action results. The skill cannot
-read it directly; it learns World facts only from returned `world_action`
-results. Skill-local text files can be served from the bounded skill bundle,
-but the simulator cannot access the real filesystem, shell, network, services,
-or other skills.
+`Success criteria` are observable outcomes. Write three to five when
+possible, and allow equivalent wording and reasonable action choices. A
+promise to act later is not completed work. Plausible code is not proof that
+it runs.
 
-For a text-only case, say that no external interaction is needed. If the
-behavior depends on a real command, service, binary artifact, host trigger, or
-multi-agent workflow, use a trusted repository check or an external test.
+For a text-only case, say that no external interaction is needed.
 
-`Success criteria` should contain three to five observable outcomes. Accept
-equivalent wording and reasonable action choices. A promise to do work later
-is not completed evidence, and plausible code is not proof that it runs.
+## Use the prompt development loop
 
-## Choose the evidence
+Turn a prompt failure into a case before fixing it:
 
-Use success criteria for meaning, judgment, equivalent wording, and reasonable
-action choices. Use exact checks only when a literal must or must not appear in
-the final response:
+1. Preserve the real request in `Input`.
+2. Describe only the external state needed for that behavior.
+3. State the observable result you expected.
+4. Confirm the case fails for the intended reason.
+5. Fix the skill and run the case again.
+6. Keep the case to catch the regression in future changes.
+
+Validate the case before spending model calls, then run it and read the report:
+
+```shell
+skillroll validate --repo PATH --case SKILL/evals/CASE.eval.md
+skillroll eval --repo PATH --case SKILL/evals/CASE.eval.md
+```
+
+If the result is surprising, inspect the transcript. Change the skill when its
+behavior is wrong. Change the case when its Input, World, or criteria do not
+describe the intended behavior clearly.
+
+## Simulated behavior and real checks
+
+Use the Dungeon Master to test how a skill behaves around external
+interactions. It can simulate a command result, a service response, a missing
+file, a failure, or any other state the behavior needs.
+
+Use a repository check or an external test only when you must prove that a real
+command runs, an artifact is valid, or a real service changed. Repository
+checks are ordinary host commands, not sandboxed operations. They run only with
+`--run-commands`.
+
+## Exact text and limits
+
+Success criteria check meaning. Use an exact assertion only when the final
+response must contain, omit, or equal literal text:
 
 ```markdown
 ~~~skillroll
@@ -74,41 +113,22 @@ assertions:
 ~~~
 ```
 
-Supported exact checks are `final_output_contains`,
-`final_output_not_contains`, and `final_output_equals`. Use synthetic canaries,
-never real credentials.
+The supported assertions are `final_output_contains`,
+`final_output_not_contains`, and `final_output_equals`. Use synthetic
+canaries, never real credentials.
 
-Trusted repository checks can verify syntax, tests, or artifacts. They are
-ordinary host commands, not sandboxed operations, and run only with
-`--run-commands`. Do not use semantic criteria to claim deterministic validity.
+Put limits under the metadata block's `limits` mapping. `max_turns` counts
+model turns, so leave one for the final response after any actions.
+`max_output_tokens` applies to the skill run, Dungeon Master, and judge.
+Raise a limit only when the intended behavior needs it.
 
-Limits belong under the metadata block's `limits` mapping; they are not valid
-top-level metadata keys. `max_turns` counts model turns, so leave one for the
-final response after any actions. `max_output_tokens` also applies to the
-model-backed World and semantic judge, not only the final response. Raise a
-limit only when the intended workflow needs it.
-
-## Validate and improve
-
-Validate before spending inference, then run one case and read its report:
-
-```shell
-skillroll validate --repo PATH --case SKILL/evals/CASE.eval.md
-skillroll eval --repo PATH --case SKILL/evals/CASE.eval.md
-```
-
-Fix the smallest responsible part: the skill, case, model configuration, or
-deterministic check. For a prompt regression, preserve the original request as
-a case and confirm the old behavior fails for the intended reason before
-editing `SKILL.md`.
-
-When a case matters, collect independent samples and optionally compare it
-with the selected skill omitted:
+For an important case, run independent samples. You can also run the same case
+without the skill:
 
 ```shell
 skillroll eval --repo PATH --case CASE --samples 3 --with-skill-control
 ```
 
-The omission control is diagnostic, not another gate. If both variants pass,
-general model behavior or an overly broad case may be carrying the result. See
-[Results](results.md) for limits and diagnosis.
+That comparison is a diagnostic, not another gate. If both variants pass, the
+Input may reveal the answer, the criteria may be too broad, or the base model
+may already provide the behavior. See [Results](results.md) for diagnosis.

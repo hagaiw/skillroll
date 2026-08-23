@@ -83,7 +83,10 @@ def render_text(result: CommandResult) -> str:
     """Render a stable, readable result without terminal-specific styling."""
     lines = [f"{result.outcome.name} — {result.summary}"]
     for diagnostic in result.diagnostics:
-        lines.extend(("", diagnostic.summary))
+        heading = f"[{diagnostic.code}]"
+        if diagnostic.summary != result.summary:
+            heading += f" {diagnostic.summary}"
+        lines.extend(("", heading))
         if diagnostic.affected is not None:
             lines.append(f"Affected: {diagnostic.affected}")
         if diagnostic.location is not None:
@@ -92,9 +95,9 @@ def render_text(result: CommandResult) -> str:
             lines.append("Details:")
             lines.extend(f"  - {detail}" for detail in diagnostic.details)
         if diagnostic.risk is not None:
-            lines.append(f"Why this matters: {diagnostic.risk}")
+            lines.append(f"Why: {diagnostic.risk}")
         if diagnostic.next_action is not None:
-            lines.append(f"What to do next: {diagnostic.next_action}")
+            lines.append(f"Next: {diagnostic.next_action}")
     return "\n".join(lines) + "\n"
 
 

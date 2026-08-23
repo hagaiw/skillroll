@@ -47,7 +47,7 @@ def run(*, target: str, repo: str | None = None) -> CommandResult:
     selected = _target(target)
     if selected is None:
         return _error(
-            "The new case target must look like SKILL/CASE-NAME.",
+            "The new eval target must look like SKILL/NAME.",
             "Use a lowercase name such as refund/eligible-order.",
             affected=target,
         )
@@ -61,15 +61,15 @@ def run(*, target: str, repo: str | None = None) -> CommandResult:
         or not (skill_directory / "SKILL.md").is_file()
     ):
         return _error(
-            "The selected skill does not contain a readable SKILL.md file.",
+            "The selected skill has no readable SKILL.md file.",
             "Choose an existing skill relative to skills_path.",
             affected=skill_path.as_posix(),
         )
     evals = skill_directory / "evals"
     if evals.is_symlink():
         return _error(
-            "SkillRoll will not create a case through a symbolic-link evals folder.",
-            "Replace that link with an ordinary folder, then run skillroll new again.",
+            "SkillRoll will not create an eval through a symbolic-link evals folder.",
+            "Replace the link with a folder, then try again.",
             affected=(skill_path / "evals").as_posix(),
         )
     case_path = evals / f"{case_name}.eval.md"
@@ -81,13 +81,12 @@ def run(*, target: str, repo: str | None = None) -> CommandResult:
     except TransactionError as error:
         return _error(
             str(error),
-            "Choose another case name or keep the existing case.",
+            "Choose another eval name or keep the existing eval.",
             affected=(skill_path / "evals" / case_path.name).as_posix(),
         )
     relative = result.changed[0].relative_to(config.skills_root).as_posix()
     return CommandResult(
         Outcome.PASS,
-        f"Created {relative}. Open it in your editor, then run skillroll eval "
-        f"--case {relative}.",
+        f"Created {relative}. Edit it, then run skillroll eval --case {relative}.",
         data={"case": relative},
     )

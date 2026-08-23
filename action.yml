@@ -1,26 +1,26 @@
 name: SkillRoll
-description: Validate and evaluate Agent Skills with the released Python harness.
+description: Run Markdown behavior evals for Agent Skills in CI.
 inputs:
   mode:
-    description: validate or eval
+    description: Check case files or run their evals
     required: true
   scope:
     description: changed, all, skill, or case
     required: true
   base-sha:
-    description: Immutable base commit for changed scope
+    description: Base commit when evaluating changed files
     required: false
   head-sha:
-    description: Immutable head commit for changed scope
+    description: Head commit when evaluating changed files
     required: false
   selection-path:
-    description: Skill or eval-case path for skill/case scope
+    description: Skill or case path when scope is skill or case
     required: false
   reviewed-ref:
-    description: Exact reviewed SHA or refs/pull/NUMBER/head for validate-ref mode
+    description: Reviewed commit or pull-request ref for a trusted run
     required: false
   run-commands:
-    description: Run declared repository checks after explicit trust
+    description: Run repository checks after reviewing and trusting them
     required: false
     default: "false"
   command-notice:
@@ -28,7 +28,7 @@ inputs:
     required: false
     default: "false"
   upload-artifact:
-    description: Upload redacted run evidence
+    description: Upload the redacted eval report
     required: false
     default: "false"
   artifact-retention-days:
@@ -36,7 +36,7 @@ inputs:
     required: false
     default: "7"
   fork-notice:
-    description: Render maintainer instructions instead of a live-run claim
+    description: Explain why an untrusted fork was not evaluated
     required: false
     default: "false"
 outputs:
@@ -50,7 +50,7 @@ outputs:
     description: Human-readable selection explanation
     value: ${{ steps.run.outputs.selection-reason }}
   artifact-path:
-    description: Relative run-evidence path when evaluation created one
+    description: Path to the eval report, when one was created
     value: ${{ steps.run.outputs.artifact-path }}
 runs:
   using: composite

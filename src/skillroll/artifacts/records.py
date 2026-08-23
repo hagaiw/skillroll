@@ -115,7 +115,7 @@ def run_bytes(facts: RunFacts) -> bytes:
 def report_bytes(facts: RunFacts) -> bytes:
     """Render a friendly preliminary report that deliberately does not judge."""
     lines = [
-        "# SkillRoll execution report",
+        "# SkillRoll run",
         "",
         f"- Skill: `{facts.skill}`",
         f"- Eval case: `{facts.case}`",
@@ -127,7 +127,7 @@ def report_bytes(facts: RunFacts) -> bytes:
             f"{name}={value}" for name, value in facts.effective_limits.items()
         ),
         "",
-        "## Observed actions and results",
+        "## Actions",
         "",
     ]
     if not facts.events:
@@ -136,6 +136,8 @@ def report_bytes(facts: RunFacts) -> bytes:
         source = (
             "read from the skill folder"
             if event.source == "skill_bundle"
+            else "Dungeon Master"
+            if event.source == "world_model"
             else event.source.replace("_", " ")
         )
         lines.extend(
@@ -150,36 +152,30 @@ def report_bytes(facts: RunFacts) -> bytes:
     if omitted:
         lines.extend(
             (
-                f"The World prompt omitted {omitted} earlier actions because its "
-                "history window is bounded.",
+                f"The Dungeon Master omitted {omitted} earlier actions to stay "
+                "within its history limit.",
                 "",
             )
         )
     if facts.failure is not None:
         lines.extend(
             (
-                "## What prevented completion",
+                "## Why the run stopped",
                 "",
                 facts.failure,
                 "",
-                "Review the named issue, then run this evaluation again.",
+                "Fix this issue, then run the eval again.",
                 "",
             )
         )
     if facts.failure_details:
-        lines.extend(("Technical details (bounded and redacted):", ""))
+        lines.extend(("Technical details (redacted):", ""))
         lines.extend(f"- {detail}" for detail in facts.failure_details)
         lines.append("")
     lines.extend(
         (
-            "## Evidence files",
-            "",
-            "- `run.json`",
-            "- `inputs.json`",
-            "- `transcript.jsonl`",
-            "",
-            "This report records execution only. SkillRoll has not "
-            "judged the Success criteria yet.",
+            "This run has not been checked against the success criteria yet.",
+            "Machine-readable details are in this run directory.",
             "",
         )
     )
@@ -217,16 +213,14 @@ def final_report_bytes(
         "final_output_equals": "output exactly matches this text",
     }
     lines = [
-        "# SkillRoll evaluation report",
+        "# SkillRoll eval report",
         "",
         f"- Skill: `{skill}`",
         f"- Eval case: `{case}`",
         "- Skill instructions: "
         + ("available" if skill_available else "intentionally omitted"),
         f"- Result: **{outcome}**",
-        "",
-        "## Did the skill finish?",
-        "",
+        "- Skill finished: " + ("yes" if finished else "no"),
     ]
     if model is not None:
         lines.insert(4, f"- Model: `{model}`")
@@ -234,20 +228,17 @@ def final_report_bytes(
             lines.insert(5, f"- Model profile: `{model_profile}`")
             if model_profile_purpose is not None:
                 lines.insert(6, f"- Profile purpose: {model_profile_purpose}")
-    lines.append(
-        "Yes — the skill produced a final response."
-        if finished
-        else "No — the skill did not produce a final response."
-    )
     if execution_turns is not None:
-        lines.append(f"Completed turns: {execution_turns}.")
-    lines.extend(("", "## Observed actions and results", ""))
+        lines.append(f"- Skill turns: {execution_turns}")
+    lines.extend(("", "## Actions", ""))
     if not events:
         lines.append("No action completed.")
     for event in events:
         source = (
             "skill folder"
             if event.source == "skill_bundle"
+            else "Dungeon Master"
+            if event.source == "world_model"
             else event.source.replace("_", " ")
         )
         lines.extend(
@@ -270,16 +261,16 @@ def final_report_bytes(
     if omitted:
         lines.extend(
             (
-                f"The World prompt omitted {omitted} earlier actions because its "
-                "history window is bounded.",
+                f"The Dungeon Master omitted {omitted} earlier actions to stay "
+                "within its history limit.",
                 "",
             )
         )
-    lines.extend(("## Semantic judgment", ""))
+    lines.extend(("## Success criteria", ""))
     if judge is None:
         lines.append("The success criteria could not be reviewed.")
     else:
-        lines.append(f"Decision: **{judge.get('verdict', 'unknown')}**")
+        lines.append(f"Result: **{judge.get('verdict', 'unknown')}**")
         rationale = judge.get("rationale")
         if isinstance(rationale, str) and rationale:
             lines.extend(("", rationale))
@@ -289,7 +280,7 @@ def final_report_bytes(
             lines.extend(f"- {item}" for item in unmet)
         criteria = judge.get("criteria")
         if isinstance(criteria, (list, tuple)) and criteria:
-            lines.extend(("", "Criterion assessments:"))
+            lines.extend(("", "Criteria:"))
             for item in criteria:
                 if not isinstance(item, Mapping):
                     continue
@@ -299,7 +290,7 @@ def final_report_bytes(
                 lines.append(f"- **{status}** — {criterion}")
                 if isinstance(evidence, str) and evidence:
                     lines.append(f"  Evidence: {evidence}")
-    lines.extend(("", "## Exact fact checks", ""))
+    lines.extend(("", "## Exact checks", ""))
     if not assertions:
         lines.append("No exact fact checks were declared for this case.")
     for assertion in assertions:
@@ -315,7 +306,7 @@ def final_report_bytes(
         observed = assertion.get("observed")
         if isinstance(observed, str) and observed:
             lines.append(f"  Observed: {observed}")
-    lines.extend(("", "## Trusted repository checks", ""))
+    lines.extend(("", "## Repository checks", ""))
     if not checks:
         lines.append("No repository checks were declared for this case.")
     for check in checks:
@@ -336,9 +327,9 @@ def final_report_bytes(
         if failure_stage is not None:
             lines.extend(("", f"Technical stage: `{failure_stage}`."))
     if failure_details:
-        lines.extend(("", "## Technical details (bounded and redacted)", ""))
+        lines.extend(("", "## Technical details (redacted)", ""))
         lines.extend(f"- {detail}" for detail in failure_details)
-    lines.extend(("", "## Execution accounting", ""))
+    lines.extend(("", "## Usage", ""))
     if execution_turns is None:
         lines.append("Model turns used: unavailable.")
     else:
@@ -347,20 +338,10 @@ def final_report_bytes(
             f"Model turns used: {execution_turns} of {limit} "
             f"({execution_turns_source})."
         )
-    lines.append("Per-stage token usage and any cost estimate are in `result.json`.")
-    lines.extend(
-        (
-            "",
-            "## Evidence files",
-            "",
-            "- `run.json` and `inputs.json`",
-            "- `transcript.jsonl` and `execution.json`",
-            "- `judge.json`, `verdict.json`, and `checks.json`",
-            "- `result.json` — the canonical summary for automation",
-            "- `checks/` logs for each repository check that started",
-            "",
-        )
+    lines.append(
+        "Token usage, cost, and machine-readable details are in `result.json`."
     )
+    lines.append("")
     return "\n".join(lines).encode("utf-8")
 
 
@@ -432,7 +413,7 @@ def experiment_report_bytes(summary: Mapping[str, object]) -> bytes:
     if not isinstance(interpretation, Mapping):
         interpretation = {}
     lines = [
-        "# SkillRoll authoring experiment",
+        "# SkillRoll comparison report",
         "",
         f"- Eval case: `{summary.get('case', 'selected cases')}`",
         f"- Model: `{summary.get('model', 'unknown')}`",
@@ -445,8 +426,7 @@ def experiment_report_bytes(summary: Mapping[str, object]) -> bytes:
         "",
         "## Paired runs",
         "",
-        "| Sample | Skill outcome | Omission-control outcome | "
-        "Interpretation | Evidence |",
+        "| Sample | With skill | Without skill | Interpretation | Evidence |",
         "| ---: | --- | --- | --- | --- |",
     ]
     pairs = summary.get("paired_comparisons", ())
@@ -483,8 +463,8 @@ def experiment_report_bytes(summary: Mapping[str, object]) -> bytes:
     lines.extend(
         (
             "",
-            "The omission control is an authoring diagnostic. It does not change "
-            "the ordinary PASS/FAIL result for the selected skill.",
+            "The no-skill comparison helps check whether the eval depends on the "
+            "skill. It does not change the skill's PASS/FAIL result.",
             "",
             "Per-run `report.md`, `result.json`, and `transcript.jsonl` contain "
             "the evidence needed for manual review.",

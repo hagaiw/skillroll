@@ -8,7 +8,7 @@ Significant changes start with an issue that explains the user problem. Small
 documentation, test, and bug fixes can go directly to a pull request when the
 scope is clear. Decisions prioritize:
 
-1. user value and fit with [PHILOSOPHY.md](PHILOSOPHY.md);
+1. user value and fit with [PRINCIPLES.md](../PRINCIPLES.md);
 2. a small, understandable maintenance surface;
 3. testability without secrets or fragile services;
 4. clear behavior and security boundaries; and

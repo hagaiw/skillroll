@@ -27,10 +27,6 @@ Start a fact-book for the ongoing debugging task “investigate intermittent API
 timeouts”. There is no fact-book yet. Initialize it in the workspace as
 `FACTS.md` and tell me what it is ready to hold.
 
-This eval exposes one `world_action` tool. Use it with `tool_name` exactly
-`Shell` and an `arguments` object containing the initialization command, or use
-`Write` with the resulting `FACTS.md` content.
-
 ## World
 
 No `FACTS.md` exists. No claim has been verified yet. The selected skill's

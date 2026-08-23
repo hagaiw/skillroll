@@ -384,17 +384,16 @@ async def judge(
             details.append(f"suggested diagnostic max_output_tokens: {suggested}")
         details.extend(
             (
-                "The shared max_output_tokens limit also caps execution and World "
-                "model calls; raising it increases worst-case spend.",
+                "The shared max_output_tokens limit also caps skill and Dungeon "
+                "Master calls; raising it increases worst-case spend.",
                 "Preserve this ERROR and rerun with only that limit changed as a "
                 "non-scoring diagnostic.",
             )
         )
         return None, InferenceFailure(
             InferenceFailureKind.MALFORMED_RESPONSE,
-            f"The semantic judge exhausted max_output_tokens={configured}; no "
-            "semantic verdict was produced. This run is a technical ERROR, not a "
-            "skill FAIL.",
+            f"The judge exhausted max_output_tokens={configured} and could not "
+            "produce a verdict. This run is an ERROR, not a skill FAIL.",
             tuple(details),
         )
     parsed, failure = _parse(

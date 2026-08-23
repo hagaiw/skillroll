@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "skillroll"
 dynamic = ["version"]
-description = "Readable, execution-based evaluations for agent skills"
+description = "A simple, drop-in eval harness for Agent Skills"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

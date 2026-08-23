@@ -127,7 +127,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mode == "validate-ref":
         if not args.reviewed_ref or not valid_reviewed_ref(args.reviewed_ref):
             result = _error(
-                "A trusted live run needs an exact commit SHA or refs/pull/NUMBER/head."
+                "A reviewed model-backed run needs an exact commit SHA or "
+                "refs/pull/NUMBER/head."
             )
         elif (
             args.scope != "all" or args.selection_path or args.base_sha or args.head_sha

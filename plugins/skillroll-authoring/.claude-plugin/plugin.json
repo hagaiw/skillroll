@@ -1,6 +1,6 @@
 {
   "name": "skillroll-authoring",
   "author": {"name": "SkillRoll"},
-  "description": "Help authors set up SkillRoll and write bounded evals.",
+  "description": "Set up SkillRoll and write Markdown behavior cases for regression tests and prompt TDD.",
   "version": "0.1.1"
 }

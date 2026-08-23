@@ -19,6 +19,6 @@ The fixed headings are Summary, Validation, and Open questions.
 ## Success criteria
 
 - Recommend extracting only the fixed renderer to a separately tested script.
-- Keep content choice and semantic success criteria in the agentic eval.
+- Keep content choice and semantic success criteria in the behavior eval.
 - Explain that the script's own deterministic tests should be separate from
-  the agentic case.
+  the behavior case.

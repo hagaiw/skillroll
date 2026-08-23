@@ -50,12 +50,24 @@ def test_text_renderer_includes_present_sections_in_order() -> None:
     )
     assert render_text(result) == (
         "FAIL — A check failed.\n\n"
-        "A readable problem.\n"
+        "[SC0999] A readable problem.\n"
         "Affected: example skill\n"
         "Location: skills/example/SKILL.md:4:2\n"
         "Details:\n  - first\n  - second\n"
-        "Why this matters: The skill may behave incorrectly.\n"
-        "What to do next: Edit the named file.\n"
+        "Why: The skill may behave incorrectly.\n"
+        "Next: Edit the named file.\n"
+    )
+
+
+def test_text_renderer_does_not_repeat_the_result_summary() -> None:
+    result = CommandResult(
+        Outcome.ERROR,
+        "The command failed.",
+        (Diagnostic("SC0001", "The command failed.", next_action="Try again."),),
+    )
+
+    assert render_text(result) == (
+        "ERROR — The command failed.\n\n[SC0001]\nNext: Try again.\n"
     )
 
 

@@ -59,10 +59,7 @@ def _error(path: Path, summary: str, line: int | None = None) -> Diagnostic:
         summary,
         affected=path.name,
         location=None if line is None else SourceLocation(path.name, line, 1),
-        next_action=(
-            "Open this .eval.md file and keep its metadata plus Input, World, "
-            "and Success criteria sections in the documented shape."
-        ),
+        next_action="Compare this file with an eval created by `skillroll new`.",
     )
 
 
@@ -72,7 +69,7 @@ def _parse_checks(
     if value is None:
         return (), ()
     if not isinstance(value, list):
-        return (), (_error(path, "metadata checks must be a list.", metadata_line),)
+        return (), (_error(path, "`checks` must be a list.", metadata_line),)
     checks: list[DeclaredCheck] = []
     errors: list[Diagnostic] = []
     names: set[str] = set()
@@ -81,7 +78,7 @@ def _parse_checks(
             errors.append(
                 _error(
                     path,
-                    "Each check needs name, command, and covers only.",
+                    "Each check must contain only `name`, `command`, and `covers`.",
                     metadata_line,
                 )
             )
@@ -103,8 +100,8 @@ def _parse_checks(
             errors.append(
                 _error(
                     path,
-                    "Each check needs a one-line name, command, and non-empty "
-                    "covers list.",
+                    "Each check needs a one-line `name` and `command`, plus a "
+                    "non-empty `covers` list.",
                     metadata_line,
                 )
             )
@@ -185,7 +182,7 @@ def _parse_rules(
     if value is None:
         return (), ()
     if not isinstance(value, list):
-        return (), (_error(path, "metadata rules must be a list.", metadata_line),)
+        return (), (_error(path, "`rules` must be a list.", metadata_line),)
     rules: list[DeterministicRule] = []
     errors: list[Diagnostic] = []
     names: set[str] = set()
@@ -195,7 +192,8 @@ def _parse_rules(
             errors.append(
                 _error(
                     path,
-                    "Each rule needs name, tool_name, arguments, and result only.",
+                    "Each rule must contain only `name`, `tool_name`, `arguments`, "
+                    "and `result`.",
                     metadata_line,
                 )
             )

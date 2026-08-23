@@ -1,13 +1,21 @@
 # Documentation
 
-Start with the [README](../README.md) to install SkillRoll and run one case.
+SkillRoll is a drop-in eval harness for skills repositories. Start with the
+[README](../README.md) to install it and run one Markdown case.
 
-- [Writing evals](writing-evals.md): case format and good evidence.
-- [Configuration](configuration.md): endpoints, models, profiles, and cost.
-- [Results](results.md): outcomes, evidence files, limits, and troubleshooting.
-- [GitHub Actions](github-actions.md): advisory automation and trust boundaries.
-- [Security model](security.md): data, model, filesystem, and command boundaries.
+Then follow the part of the loop you need:
 
-Project policies live in [CONTRIBUTING.md](../CONTRIBUTING.md),
-[SECURITY.md](../SECURITY.md), [SUPPORT.md](../SUPPORT.md), and
-[GOVERNANCE.md](../GOVERNANCE.md).
+1. [Write an eval](writing-evals.md): describe one behavior and the World around
+   it.
+2. [Configure a model](configuration.md): connect an endpoint and understand
+   cost.
+3. [Read a result](results.md): inspect the evidence, fix the prompt, and rerun.
+4. [Add GitHub Actions](github-actions.md): keep useful cases as advisory
+   regression checks.
+5. [Review the security model](security.md): understand what each model stage,
+   command, and artifact can access.
+
+Project policies live in [CONTRIBUTING.md](../.github/CONTRIBUTING.md),
+[SECURITY.md](../.github/SECURITY.md),
+[SUPPORT.md](../.github/SUPPORT.md), and
+[GOVERNANCE.md](../.github/GOVERNANCE.md).

@@ -59,7 +59,10 @@ class SkillRollParser(argparse.ArgumentParser):
 def _parser() -> SkillRollParser:
     parser = SkillRollParser(
         prog="skillroll",
-        description="Set up, validate, and evaluate agent skills.",
+        description=(
+            "Test skills with Markdown evals and a Dungeon Master that simulates "
+            "the outside world."
+        ),
         epilog=(
             "init creates local setup files. Add --github-workflow only when "
             "you want a visible GitHub Actions workflow."
@@ -69,7 +72,7 @@ def _parser() -> SkillRollParser:
     parser.add_argument("--output", choices=("text", "json"), default="text")
     commands = parser.add_subparsers(dest="command")
     init_parser = commands.add_parser(
-        "init", help="Create safe local SkillRoll setup files for a repository."
+        "init", help="Set up SkillRoll in a skills repository."
     )
     init_parser.add_argument(
         "--repo", metavar="PATH", help="Repository directory to set up."
@@ -93,9 +96,7 @@ def _parser() -> SkillRollParser:
     init_parser.add_argument(
         "--starter-evals",
         metavar="SKILL_PATH",
-        help=(
-            "Create two editable starter cases for this skill relative to skills_path."
-        ),
+        help="Create two starter evals for a skill relative to skills_path.",
     )
     init_parser.add_argument(
         "--yes",
@@ -106,7 +107,7 @@ def _parser() -> SkillRollParser:
         "--openrouter-free",
         action="store_true",
         help=(
-            "Explicitly configure OpenRouter's free inference defaults; "
+            "Configure OpenRouter's changing free route for setup checks only; "
             "never reads the key."
         ),
     )
@@ -122,28 +123,24 @@ def _parser() -> SkillRollParser:
         metavar="OWNER/REPOSITORY@TAG",
         help="Released SkillRoll Action reference for --github-workflow.",
     )
-    new_parser = commands.add_parser(
-        "new", help="Create one editable eval case beside an existing skill."
-    )
+    new_parser = commands.add_parser("new", help="Create an eval for a skill.")
     new_parser.add_argument(
-        "target", metavar="SKILL/CASE-NAME", help="Skill path and new case name."
+        "target", metavar="SKILL/NAME", help="Skill path and new eval name."
     )
     new_parser.add_argument(
         "--repo", metavar="PATH", help="Repository directory containing SkillRoll."
     )
-    doctor_parser = commands.add_parser(
-        "doctor", help="Check whether configured inference can run SkillRoll."
-    )
+    doctor_parser = commands.add_parser("doctor", help="Check the model connection.")
     doctor_parser.add_argument(
         "--repo", metavar="PATH", help="Repository directory to inspect."
     )
     doctor_parser.add_argument(
         "--model-profile",
         metavar="NAME",
-        help="Named ranked model profile to use during preflight and evaluation.",
+        help="Model profile to use.",
     )
     validate_parser = commands.add_parser(
-        "validate", help="Validate skill and eval files."
+        "validate", help="Check skills and evals without using a model."
     )
     validate_parser.add_argument(
         "--repo", metavar="PATH", help="Repository directory to validate."
@@ -162,10 +159,11 @@ def _parser() -> SkillRollParser:
         "--run-commands",
         action="store_true",
         help=(
-            "Run checks written in eval files, only after you trust this repository."
+            "Run repository commands declared by evals. Only use this for code "
+            "you trust."
         ),
     )
-    evaluate_parser = commands.add_parser("eval", help="Run skill evaluations.")
+    evaluate_parser = commands.add_parser("eval", help="Run skill evals.")
     evaluate_parser.add_argument(
         "--repo", metavar="PATH", help="Repository directory to evaluate."
     )
@@ -183,31 +181,26 @@ def _parser() -> SkillRollParser:
         "--run-commands",
         action="store_true",
         help=(
-            "Run checks written in eval files, only after you trust this repository."
+            "Run repository commands declared by evals. Only use this for code "
+            "you trust."
         ),
     )
     evaluate_parser.add_argument(
         "--model-profile",
         metavar="NAME",
-        help="Named ranked model profile to use during preflight and evaluation.",
+        help="Model profile to use.",
     )
     evaluate_parser.add_argument(
         "--samples",
         type=int,
         default=1,
         metavar="N",
-        help=(
-            "Run N independent samples (1-10). Each sample has its own evidence; "
-            "useful for authoring and model-dependence research."
-        ),
+        help="Run each eval N times (1-10).",
     )
     evaluate_parser.add_argument(
         "--with-skill-control",
         action="store_true",
-        help=(
-            "Also run each sample without the selected skill as a non-gating "
-            "authoring control."
-        ),
+        help="Also run without the skill to check whether the eval depends on it.",
     )
     return parser
 

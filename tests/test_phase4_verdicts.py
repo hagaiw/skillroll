@@ -292,10 +292,10 @@ def test_overall_explanations_name_the_independent_failure_source() -> None:
     skipped = CheckResult(check, "SKIPPED", None, "", "", None)
     failed_check = CheckResult(check, "FAIL", 1, "", "", 0.1)
 
-    assert "not available" in evaluate._overall_text("FAIL", None, (), (), None)[0]
-    assert "rejected" in evaluate._overall_text("FAIL", failing, (), (), None)[0]
+    assert "could not check" in evaluate._overall_text("FAIL", None, (), (), None)[0]
+    assert "did not meet" in evaluate._overall_text("FAIL", failing, (), (), None)[0]
     assert (
-        "fact check"
+        "exact output check"
         in evaluate._overall_text("FAIL", passing, failed_fact, (), None)[0]
     )
     assert (
@@ -303,7 +303,7 @@ def test_overall_explanations_name_the_independent_failure_source() -> None:
         in evaluate._overall_text("INCOMPLETE", passing, (), (skipped,), None)[0]
     )
     assert (
-        "trusted repository check"
+        "repository check"
         in evaluate._overall_text("FAIL", passing, (), (failed_check,), None)[0]
     )
 
@@ -719,13 +719,13 @@ def test_judge_reports_length_finish_reason_before_parsing(tmp_path: Path) -> No
     )
     assert result is None and failure is not None
     assert failure.kind is InferenceFailureKind.MALFORMED_RESPONSE
-    assert "semantic judge" in failure.summary
-    assert "technical ERROR, not a skill FAIL" in failure.summary
+    assert "judge exhausted" in failure.summary
+    assert "ERROR, not a skill FAIL" in failure.summary
     assert "max_output_tokens=8192" in failure.summary
     assert failure.details[0] == "provider finish_reason: length"
     assert any("1 criterion" in detail for detail in failure.details)
     assert "suggested diagnostic max_output_tokens: 16384" in failure.details
-    assert any("execution and World" in detail for detail in failure.details)
+    assert any("skill and Dungeon Master" in detail for detail in failure.details)
 
 
 def test_judge_output_estimate_scales_with_case_complexity() -> None:
@@ -938,10 +938,10 @@ def test_skipped_check_explains_trust_and_exact_remediation(tmp_path: Path) -> N
     )
     skipped = skipped_check(request)
     assert skipped.outcome == "SKIPPED"
-    assert "repository code" in (skipped.detail or "")
-    assert "--run-commands" in (
+    assert "repository commands can" in (skipped.detail or "")
+    assert "--run-commands" in (skipped.detail or "") and "model key is removed" in (
         skipped.detail or ""
-    ) and "inference key is not passed" in (skipped.detail or "")
+    )
 
 
 def test_check_environment_removes_only_configured_key_and_real_runner(
@@ -1325,7 +1325,7 @@ def test_final_report_handles_missing_judge_assertions_checks_and_failure() -> N
         (),
         None,
     )
-    assert b"Decision: **PASS**" in empty_explanation
+    assert b"Result: **PASS**" in empty_explanation
     detailed = final_report_bytes(
         "skill",
         "case",
@@ -1369,11 +1369,11 @@ def test_final_report_handles_missing_judge_assertions_checks_and_failure() -> N
     assert all(
         heading in detailed
         for heading in (
-            "Did the skill finish?",
-            "Observed actions and results",
-            "Semantic judgment",
-            "Exact fact checks",
-            "Trusted repository checks",
+            "Skill finished: yes",
+            "Actions",
+            "Success criteria",
+            "Exact checks",
+            "Repository checks",
         )
     )
     assert "`Read`" in detailed and "literal was present" in detailed
@@ -1598,9 +1598,12 @@ def test_experiment_interpretations_cover_every_authoring_outcome(
 
     assert "without" in evaluate._control_interpretation(passed, None)
     assert "inconclusive" in evaluate._control_interpretation(errored, failed)
-    assert "distinguishes" in evaluate._control_interpretation(passed, failed)
+    assert (
+        "passed with the skill and failed without"
+        in evaluate._control_interpretation(passed, failed)
+    )
     assert "passed without" in evaluate._control_interpretation(failed, passed)
-    assert "does not yet" in evaluate._control_interpretation(failed, failed)
+    assert "did not pass" in evaluate._control_interpretation(failed, failed)
     assert "clear comparison" in evaluate._control_interpretation(passed, unusual)
 
     pair = evaluate.ExperimentPair(1, passed, failed)
@@ -1841,7 +1844,7 @@ def test_evaluate_records_judge_failure_as_a_semantic_stage_error(
     assert '"status":"completed"' in summary
     assert '"stage":"semantic_judgment"' in summary
     assert '"provider finish_reason: length"' in summary
-    assert "technical ERROR, not a skill FAIL" in summary
+    assert "ERROR, not a skill FAIL" in summary
 
 
 def test_evaluate_keeps_a_fallback_limit_for_an_invalid_direct_case(
@@ -2211,7 +2214,7 @@ def test_evaluate_command_maps_validation_and_service_results(
     )
 
 
-def test_single_case_summary_includes_one_line_judge_rationale(
+def test_single_case_summary_points_to_the_result_and_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     case = case_at(tmp_path)
@@ -2249,10 +2252,9 @@ def test_single_case_summary_includes_one_line_judge_rationale(
 
     monkeypatch.setattr(evaluate, "evaluate_repository", outcome)
     result = evaluate.run(repo=str(tmp_path), environment={"KEY": "x"})
-    assert (
-        "Judge: The skill inspected every required check, then withheld the merge."
-        in result.summary
-    )
+    assert "met every success criterion" in result.summary
+    assert "Report: .skillroll/runs/run-id/report.md." in result.summary
+    assert "inspected every required check" not in result.summary
 
 
 def test_evaluate_repository_stops_before_execution_for_profile_or_preflight_error(

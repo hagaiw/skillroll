@@ -1,8 +1,8 @@
 # Working on SkillRoll
 
-Read [PHILOSOPHY.md](PHILOSOPHY.md) before changing the project. Every change
-must preserve it. If a request conflicts with the philosophy, stop and ask for
-clarification.
+Read [PRINCIPLES.md](PRINCIPLES.md) before changing the project. Every change
+must preserve them. If a request conflicts with the principles, stop and ask
+for clarification.
 
 Use [README.md](README.md) and [docs/index.md](docs/index.md) for public behavior
 and terminology. Keep documentation about the current product, not the history
@@ -31,6 +31,6 @@ or issue rather than maintaining a project history in the repository. Delegate
 bounded work when it reduces review cost, and review the result in the main
 session.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for verification and contribution rules,
-[SECURITY.md](SECURITY.md) for vulnerability reporting, and
-[SUPPORT.md](SUPPORT.md) for supported environments.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for verification and contribution
+rules, [SECURITY.md](.github/SECURITY.md) for vulnerability reporting, and
+[SUPPORT.md](.github/SUPPORT.md) for supported environments.

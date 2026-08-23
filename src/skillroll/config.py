@@ -65,7 +65,8 @@ def _config_error(path: Path, summary: str) -> ParsedResult[SkillRollConfig]:
                 "SCG1001",
                 summary,
                 path,
-                "Correct skillroll.toml using the documented minimal example.",
+                "Run `skillroll init` to create a minimal configuration, or "
+                "compare this file with the README example.",
             ),
         ),
     )

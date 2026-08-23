@@ -1,195 +1,102 @@
 # Bounded repository eval pass
 
-Use this reference only for a broad request such as “add SkillRoll-based
-evals to this repository.” It describes the default first pass for a coding
-agent that may inspect many skills and produce a diff a maintainer or an
-AI-assisted reviewer must understand without the authoring conversation.
+Use this reference for a broad request such as “add SkillRoll evals to this
+repository.” Inspect broadly, then write one small batch a maintainer can
+review.
 
-## Inspect, classify, and select
+## Find the useful behaviors
 
-Read the repository instructions, SkillRoll configuration, and every
-discovered skill's `SKILL.md` before selecting cases. For each considered skill,
-choose one fit classification:
+Read the repository instructions, SkillRoll configuration, and each discovered
+`SKILL.md`. Classify each skill before selecting cases:
 
-| Classification | Meaning | Action |
+| Fit | Meaning | Action |
 | --- | --- | --- |
-| **Good behavioral fit** | A meaningful instruction-following behavior can be represented by realistic `Input`, controlled `World` state, and semantic outcomes. | Candidate for the first batch. |
-| **Partial fit** | Some decisions or boundaries are testable, but scripts, artifacts, triggering, services, or integrations need other evidence. | Author only the meaningful part and state the boundary. |
-| **External evidence needed** | The value depends mainly on real host files, binary artifacts, commands, nested skills, secrets, services, or integrations this harness cannot exercise. | Do not create a misleading behavioral case; name the better evidence source. |
-| **No discriminating case found** | Proposed criteria describe generic competence, or a realistic request would not distinguish the skill from its omission without revealing the answer. | Do not add a rubber-stamp case; explain what blocked useful authoring. |
+| Good behavioral fit | A meaningful skill-owned behavior can be expressed with Input, World, and semantic criteria. | Consider it for this batch. |
+| Partial fit | A decision is testable, but the real command, service, or artifact needs other evidence. | Test only the decision and state the boundary. |
+| External evidence needed | The value depends mainly on real files, commands, services, secrets, nested skills, or visual artifacts. | Name the better test; do not add a misleading case. |
+| No distinct case found | The proposed criteria test generic competence or require Input to reveal the answer. | Explain the deferral. |
 
-Prioritize by consequence of regression, distinct skill-owned behavior, current
-lack of evidence, and harness fit. Do not select alphabetically or merely by
-ease.
+Prioritize consequential regressions, behavior the skill distinctly adds, and
+good fit with the Dungeon Master simulation.
 
-## Keep the first diff bounded
+## Keep the first batch small
 
-The default repository pass inspects broadly but writes one reviewable batch:
+Unless the user asks for more:
 
 - select at most three skills;
-- prefer one case per selected skill;
-- add a second case only for a distinct, important behavior or boundary; and
-- create no more than six eval files in the first batch.
+- prefer one case per skill;
+- add a second only for a separate important behavior; and
+- create no more than six case files.
 
-These are authoring review limits, not schema limits. Honor an explicit request
-for a larger pass by working in named batches and summarizing each batch
-separately. Do not add a planning report, coverage ledger, generated README, or
-case merely to make every skill look covered. Remove abandoned drafts,
-placeholders, redundant cases, and temporary notes before handoff. A clean
-deferral is successful authoring.
+Do not add placeholders, planning reports, generated READMEs, or a case for
+every skill. A clear deferral is a successful result. Whole-skill coverage is a
+separate request; do not create `evals/COVERAGE.md` by default.
 
-Whole-skill coverage is a separate, explicit **Cover** progression step. Do not
-create `<skill>/evals/COVERAGE.md` during the default broad repository pass. If
-the request asks for whole-skill coverage or a selected skill is complex enough
-to justify a small worksheet, follow the optional worksheet guidance in
-[authoring context](references/context.md). That file is human-readable
-documentation only: it is not a case, is not parsed or validated, and does not
-gate CI.
+## Author and validate
 
-## Author and validate each case
+Each case belongs beside its skill, normally at
+`<skill>/evals/<scenario>.eval.md`. Follow the basic three-section template in
+[authoring context](context.md).
 
-Each case belongs beside its selected skill, normally under
-`<skill>/evals/<scenario>.eval.md`, and contains only:
+Keep Input realistic. Put external state in World. Write three to five
+observable criteria that trace to the skill and accept equivalent good
+behavior. For each criterion, know which skill instruction should cause it,
+where the evidence will appear, and what remains untested.
 
-```markdown
-# A specific scenario or boundary
+Run focused `skillroll validate` while authoring and `skillroll validate --all`
+at the end. Validation proves that cases parse and are safe to select; it does
+not prove that the behavior passes. Do not edit `SKILL.md` merely to make a new
+case green unless the user also asked to repair the skill.
 
-~~~skillroll
-schema_version: 1
-~~~
+## Respect the permission boundary
 
-## Input
+An “add evals” request allows inspection and authoring. It does not by itself
+authorize paid inference, repository commands, skill rewrites, secrets, or CI
+changes. Start offline.
 
-The realistic request and context the actor would actually have.
+If model-backed evals are authorized, spend calls progressively: run one
+promising case, inspect its response and transcript, and use samples or a
+no-skill comparison only when the case remains worth strengthening. Stop when
+the behavior belongs in an integration test or the case cannot distinguish the
+skill without coaching Input.
 
-## World
+## Leave a stand-alone handoff
 
-The external facts or simulated action results needed to progress the case,
-including relevant unavailable capabilities.
+Assume the maintainer did not see the authoring conversation. State:
 
-## Success criteria
+1. what repository scope was inspected;
+2. which cases changed and what behavior each tests;
+3. the strongest evidence actually earned;
+4. important deferrals and why they need different evidence;
+5. commands and model-backed runs, including what was not run; and
+6. the smallest next action.
 
-- Observable behavior owned by the selected skill.
-- Correct handling of the expected boundary or failure.
-- Equivalent wording and action choices remain acceptable.
-```
+Use these labels carefully:
 
-Keep `Input` close to a real user or main-session request. Never put the
-skill's preferred decision, workflow, expected wording, review commentary, or
-success condition into `Input` to make a run pass. Keep `World` minimal and
-coherent: it supplies external state, not coaching. Criteria should usually
-number three to five observable outcomes and trace to the skill's instructions.
-For each criterion, be able to name the exact skill section, the observable
-evidence source (response, transcript, World result, trusted check, or external
-test), and what remains untested. Include that compact mapping in the handoff
-when it is not obvious from the case itself; do not add it to evaluated Input.
+- **Drafted:** validated offline.
+- **Exercised:** observed in one complete run.
+- **Discriminating:** repeated skill success and coherent no-skill comparison
+  failure were inspected.
+- **Regression-sensitive:** a reviewed damaged revision failed for the intended
+  reason.
 
-The evaluated agent does not read `World`; only the separate simulator does.
-For every unavailable capability, record how the agent can observe the failure:
-realistically known context in `Input`, one predictable action with a fixed
-error result, or external host evidence. If the selected skill mandates a
-dynamic tool workflow that the proposed case disables, do not assume World
-prose will block those actions. Defer the behavior rather than authoring a case
-that can only exhaust its turns inside a simulated workflow.
+Do not call a drafted case coverage, a caught regression, or proof of the whole
+skill. Do not promote cases to blocking CI. Recommend an exploratory or
+advisory next step unless stronger evidence exists.
 
-Run focused `skillroll validate` while authoring and
-`skillroll validate --all` at the end. Validation checks parsing, selection,
-containment, and limits; it does not prove skill quality or meaningfulness.
-Do not modify `SKILL.md` merely to make a new case pass unless the user also
-authorized repairing the skill. Report a discovered behavior gap instead.
-
-## Permission and inference boundaries
-
-An “add evals” request authorizes inspection and authoring, not unlimited paid
-inference, arbitrary host commands, repository code execution, skill rewrites,
-or automatic CI gating. Start with offline validation. If live inference is
-explicitly authorized, spend it progressively:
-
-1. run one baseline attempt for a promising case;
-2. inspect the transcript and per-criterion evidence;
-3. use independent samples and the selected-skill omission control only for
-   cases still worth strengthening; and
-4. stop when a case is technically incompatible, repeatedly generic, or
-   clearly outside the harness.
-
-The omission control runs the same case without `SKILL.md` or skill-local
-files. A selected-skill PASS with control FAIL is evidence that distinguishes
-that sample; two PASSes suggest generic behavior or a weak case. This is
-diagnostic evidence, not a second gate and not permission to leak the answer
-into `Input`. Record model, sample/control counts, errors, and unavailable
-evidence honestly. Missing usage is “unavailable,” never zero.
-
-## Context-complete artifacts
-
-Assume every case, report, diff, and handoff may be opened alone by someone who
-knows neither SkillRoll nor the repository. At the smallest useful scale,
-state:
-
-1. **Identity:** what the artifact is and the exact skill or case path.
-2. **Purpose:** the behavior or risk examined and why it matters.
-3. **Status and evidence:** what was validated or run, using the evidence
-   labels below and linking to direct repository-relative paths.
-4. **Boundary:** what was not tested and what the result does not prove.
-5. **Next action:** what the maintainer should review, fix, run, defer, or
-   consider for advisory CI.
-
-Use this proportionally: a case title and criteria can carry context for the
-case itself; a repository handoff needs an opening explanation and per-skill
-results. Define terms such as “omission control” on first use. Do not claim to
-test host triggering, real services, commands, or binary artifacts when the
-harness only simulates them. Keep review-only explanation outside evaluated
-`Input`.
-
-## Evidence language
-
-Use the strongest label actually earned; labels are summary language, not case
-metadata:
-
-| Label | Evidence available | Permitted claim |
-| --- | --- | --- |
-| **Drafted** | The case parses and validates offline. | A structurally valid case was added for the named behavior. |
-| **Exercised** | One complete selected-skill run was inspected. | The behavior was observed in one run. |
-| **Discriminating** | Repeated selected-skill success and coherent omission-control failure were reviewed. | The case distinguishes the current skill from its omission under this setup. |
-| **Regression-sensitive** | The case also fails a reviewed realistic damaged revision for the intended reason. | The case detected the seeded regression. |
-| **Gate candidate** | Stability, evidence clarity, cost, privacy, and technical reliability were reviewed in addition to regression sensitivity. | Consider a non-blocking CI warning. |
-
-Do not say an eval “caught a gap” because it was written or because an
-omission control failed. Use that phrase only for an actual current skill
-defect, missing instruction, or reviewed damaged revision; name the exact gap
-and evidence. Do not call a small selected batch “coverage.” No authoring agent
-may promote a case to blocking CI.
-
-## Required compact handoff
-
-End the task with a short summary that stands alone. Open by explaining that
-SkillRoll is the repository's behavioral eval harness for Agent Skills, what
-repository scope was inspected, and why this batch exists. Then include:
+A compact handoff can use this shape:
 
 ```markdown
-What changed and what it demonstrated
-- `<skill>/evals/<case>.eval.md`: tests `<skill-owned behavior>`; status is
-  `<Drafted|Exercised|Discriminating|Regression-sensitive|Gate candidate>`.
-  Evidence: `<validation or run facts and direct report path>`.
+What changed
+- `<case path>` tests `<skill-owned behavior>`; status: `<label>`.
 
-Gaps and poor fits
-- `<skill path>`: no case added because `<specific harness boundary or no
-  discriminating behavior>`; use `<better evidence source>` when known.
-- `<skill path>`: observed gap `<specific behavior>`; not silently fixed.
+Deferred
+- `<skill path>` needs `<real command, service, artifact, or other evidence>`.
 
-Recommendation
-- Merge as exploratory/advisory, consider a non-blocking warning after
-  `<missing evidence>`, or do not merge yet because `<reason>`.
+Verification
+- Inspected `<count>` skills; selected `<count>`; deferred `<count>`.
+- Ran `<commands and live evals>`. Did not run `<unrun work>`.
 
-Verification and limits
-- Inspected: `<count>` skills; selected `<count>`; deferred `<count>`.
-- Validation: `<commands and results>`.
-- Live evidence: `<model, samples, controls, errors, artifact paths>` or
-  “not authorized/run.”
-- Not tested: `<important boundary>`.
+Next
+- `<one review, run, or advisory CI action>`.
 ```
-
-The handoff must state counts of inspected, selected, and deferred skills;
-every added behavior and file; the strongest evidence label; concrete gaps;
-poor-fit reasons; validation and live-run facts; unrun work; and whether the
-recommendation is exploratory/advisory, a warning pilot, or not ready. “All
-tests passed” alone is not an adequate handoff.

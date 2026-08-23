@@ -271,7 +271,7 @@ def test_installed_wheel_initializes_and_validates_spaced_skill_repositories(
     automatic_config = (automatic / "skillroll.toml").read_text(encoding="utf-8")
     assert 'base_url = "https://openrouter.ai/api/v1"' in automatic_config
     assert 'model = "openrouter/free"' in automatic_config
-    assert 'api_key_env = "OPENROUTER_API_KEY"' in automatic_config
+    assert 'api_key_env = "SKILLROLL_API_KEY"' in automatic_config
 
 
 def test_module_and_direct_main_are_equivalent() -> None:
@@ -350,5 +350,5 @@ def test_installed_wheel_validates_the_dogfood_marketplace_without_source_import
 
     assert completed.returncode == 0
     assert json.loads(completed.stdout)["summary"] == (
-        "Checked 13 skills and ran 3 repository checks."
+        "Validated 13 skills and ran 3 repository checks."
     )

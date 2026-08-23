@@ -45,7 +45,7 @@ def test_new_rejects_ambiguous_or_unsafe_targets(tmp_path: Path, target: str) ->
     configured_repo(tmp_path)
     result = create_case.run(repo=str(tmp_path), target=target)
     assert result.outcome is Outcome.ERROR
-    assert "SKILL/CASE-NAME" in result.summary
+    assert "SKILL/NAME" in result.summary
 
 
 def test_new_requires_setup_and_an_existing_skill(tmp_path: Path) -> None:

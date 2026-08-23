@@ -50,13 +50,6 @@ fact that the production API client's timeout is 30 seconds. Keep the existing
 record and use the next stable record ID. The source is
 `src/client.py:42`, whose relevant line is `timeout = 30`.
 
-This eval exposes one `world_action` tool. Use `Read` with
-`{"path": "FACTS.md"}` before reading `src/client.py`, and read
-`references/context.md` before the first record write. Then use `Write` with
-both `path` and the complete replacement `content` to update the book. Finish
-by reporting the new record ID `R-002`. Preserve the complete existing `R-001`
-record and use the skill's canonical Markdown record shape.
-
 ## World
 
 The existing book contains one unrelated active fact and has no `R-002` yet.

@@ -1,6 +1,6 @@
 {
   "name": "harness-prompts",
   "author": {"name": "SkillRoll"},
-  "description": "Dogfood skills for the three model-facing SkillRoll harness contracts.",
+  "description": "SkillRoll's executor, Dungeon Master, and judge prompt contracts.",
   "version": "0.1.1"
 }

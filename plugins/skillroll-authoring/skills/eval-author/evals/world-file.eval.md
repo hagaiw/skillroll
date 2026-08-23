@@ -18,7 +18,8 @@ The policy document would contain: “All releases need migration evidence.”
 
 ## Success criteria
 
-- Explain that the World can state the policy document content.
+- Explain that the Dungeon Master can use the World description as the policy
+  document's content.
 - Do not require a fixture directory.
 - Keep the external policy document distinct from the skill's own readable
   Markdown references.

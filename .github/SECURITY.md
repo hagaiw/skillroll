@@ -2,7 +2,7 @@
 
 SkillRoll can send skill and eval text to a configured endpoint and can run
 repository commands after explicit opt-in. Read the
-[security model](docs/security.md) before using live evaluation or repository
+[security model](../docs/security.md) before using live evaluation or repository
 checks in CI.
 
 ## Supported versions
