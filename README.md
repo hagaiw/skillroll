@@ -5,9 +5,9 @@
 <h1 align="center">skillroll</h1>
 
 <p align="center">
-  <strong>Simple eval infrastructure for agent skills.</strong><br>
-  Describe one behavior in Markdown. A Dungeon Master simulates the outside
-  world. skillroll tells you whether the behavior still works.
+  <strong>Test agent skills in worlds you can describe.</strong><br>
+  Write eval cases in Markdown. A Dungeon Master simulates the outside world.
+  skillroll returns an evidence-backed verdict.
 </p>
 
 <p align="center">
@@ -16,82 +16,24 @@
   <a href="docs/results.md">Understand a result</a>
 </p>
 
-![skillroll demo: create a wait-for-CI eval, edit it, run it, and read the judge summary](docs/assets/skillroll-demo.gif)
-
 skillroll is a drop-in eval harness for repositories of
-[Agent Skills](https://agentskills.io/). It gives prompt maintenance the same
-regression loop that tests give code, without a custom test framework for every
-skill.
+[Agent Skills](https://agentskills.io/). It turns skill decisions into readable
+regression checks.
 
-> If you can explain what a skill should do, you can eval it.
+## Example
 
-## Why skillroll exists
+### Skill
 
-Scripts have exact inputs and outputs. Agent skills do not. A good skill may
-take different paths, use different words, and still do the right thing.
-Deterministic assertions are a poor fit for that behavior.
+```markdown
+# Adventurer
 
-Traditional eval harnesses work around this with mocks, fixtures, fake APIs,
-and skill-specific setup. Those systems are expensive to write and harder to
-maintain than the prompts they protect.
-
-skillroll replaces that setup with one small Markdown case.
-
-## How it works
-
-Each case describes three things:
-
-- `Input`: the realistic request given to the skill;
-- `World`: the external state the skill can encounter; and
-- `Success criteria`: the important behavior to preserve.
-
-During the run, the skill sends external actions through one controlled
-boundary. A Dungeon Master agent answers from the written World and the action
-history. It can simulate a file, API, service, person, failure, or any other
-outside interaction the case needs.
-
-When an answer must be exact, a case can provide a deterministic rule. For
-everything else, the Dungeon Master keeps the simulation coherent. A final
-judge compares the observed behavior with the success criteria and returns a
-verdict with readable evidence.
-
-No mock server. No fake SDK. No per-skill harness code.
-
-## Prompt TDD
-
-1. Describe the failing or required behavior before changing the prompt.
-2. Run the case and inspect what the skill actually did.
-3. Make the smallest prompt fix that changes the behavior.
-4. Run the case again and keep it as a regression test.
-
-![Dark skillroll evidence summary showing required E2E still running and the merge correctly withheld](docs/assets/evidence-report.png)
-
-## Quickstart
-
-skillroll requires Python 3.12 or later and
-[`uv`](https://docs.astral.sh/uv/).
-
-```shell
-uv tool install skillroll
+Seek glory and treasure. Try to keep all your limbs.
 ```
 
-From a repository that already contains `SKILL.md` files:
-
-```shell
-cd /path/to/my-skills
-skillroll init
-skillroll new my-skill/first-use
-```
-
-`init` detects the skills folder, confirms it with you, and writes a small local
-configuration. `--yes` is only for scripts that need to accept the detected
-folder without questions. skillroll does not replace an existing configuration
-or eval case.
-
-Open `my-skill/evals/first-use.eval.md` and replace the placeholders:
+### Eval
 
 ````markdown
-# First use
+# Inspect before risky action
 
 ```skillroll
 schema_version: 1
@@ -99,29 +41,151 @@ schema_version: 1
 
 ## Input
 
-The request the skill should handle.
+An ornate chest sits alone in a dungeon room. What do you do?
 
 ## World
 
-The outside state and action results the skill may encounter.
+The chest is a sleeping mimic. Inspection reveals teeth.
 
 ## Success criteria
 
-- The important behavior that must remain true.
-```
+- Inspect before touching.
+- Do not open a mimic.
 ````
 
-Validate the Markdown without calling a model:
+### Session
 
-```shell
-skillroll validate --case my-skill/evals/first-use.eval.md
+```text
+ADVENTURER → I open the chest.
+
+DM         → The chest opens you back.
 ```
 
-## Connect any compatible model
+### Judgment
 
+```text
+FAIL — Treasure: 0. Limbs retained: 3.
+```
+
+This is one check on a much broader skill. The eval cares about the choice, not
+an exact script, and the report shows why it failed.
+
+## The same framework fits any skill
+
+- `Input` is the request or task that invokes the skill.
+- `World` is the Dungeon Master's private brief: the files, APIs, services,
+  people, failures, and action results the skill may encounter.
+- `Success criteria` tell the judge what observable behavior must hold.
+
+A release skill can encounter CI that is still running. A browser skill can
+find a failed request behind a success message. A support skill can spot an
+open chargeback before issuing a refund.
+
+The skill receives the Input, not the World. The Dungeon Master answers its
+external actions using the World and action history. Deterministic rules can
+provide exact results when needed. The judge compares the resulting evidence
+with the success criteria.
+
+```text
+INPUT ──→ SKILL ←──→ DUNGEON MASTER
+              │             │
+              └── evidence ─┘
+                     │
+                     ▼
+                   JUDGE
+                 PASS / FAIL
+```
+
+No mock server. No fake SDK. No per-skill harness code.
+
+## Prompt TDD
+
+The failed Mimic case is now a regression test:
+
+1. Describe the failing or required behavior.
+2. Run the case and inspect what the skill actually did.
+3. Make the smallest prompt change that fixes the behavior.
+4. Run the case again and keep it.
+
+```diff
+ # Adventurer
+
+ Seek glory and treasure. Try to keep all your limbs.
++Inspect unfamiliar objects before touching them.
+```
+
+```text
+ADVENTURER → I inspect the chest from a safe distance.
+
+DM         → Its lid is breathing. You spot teeth underneath.
+
+ADVENTURER → Mimic. I leave it alone.
+
+PASS — Treasure: 0. Limbs retained: 4.
+```
+
+Different path. Better behavior. Permanent check.
+
+## Quickstart
+
+skillroll requires Python 3.12 or later and
+[`uv`](https://docs.astral.sh/uv/). Install the command-line tool:
+
+```shell
+uv tool install skillroll
+```
+
+Interactively setup skillroll and create a `skillroll.toml` at the repo's root.
+It automatically idenitifes the skills folder path and sets up an inference api key
+
+```shell
+cd /path/to/repository
+skillroll init
+```
+
+Create a new eval for the `Adventurer` skill called `inspect-before-risky-action`:
+
+```shell
+skillroll new adventurer inspect-before-risky-action
+```
+This creates `adventurer/evals/inspect-before-risky-action.eval.md` eval template for you to edit.
+
+
+Then validate all evals in the repo using: 
+```shell
+skillroll validate
+```
+
+Make an API key available to skillroll in your current shell:
+```shell
+export SKILLROLL_API_KEY="your-key"
+```
+
+Check the model connection:
+```shell
+skillroll doctor
+```
+
+Run all evals under the current working directory:
+```shell
+skillroll eval
+```
+
+Or just a specific eval (relative to skills folder):
+```shell
+skillroll eval --case adventurer/evals/inspect-before-risky-action.eval.md
+```
+
+The command prints its verdict and saves the report under `repository/.skillroll/runs/`
+
+## Inference
+
+Running an eval requires an API key for a compatible inference endpoint.
 skillroll works with OpenAI-compatible Chat Completions endpoints that support
-tool calling and structured JSON output. It is not tied to OpenAI or
-OpenRouter. Enter these values during `init`, or add them to `skillroll.toml`:
+tool calling and strict JSON Schema structured outputs.
+
+If you entered model settings during `init`, they are already in
+`skillroll.toml`. Otherwise, add them now:
 
 ```toml
 [inference]
@@ -130,33 +194,14 @@ model = "provider/model-name"
 api_key_env = "SKILLROLL_API_KEY"
 ```
 
-The configuration stores the name of an environment variable, never the key.
-`SKILLROLL_API_KEY` is the provider-neutral default; `api_key_env` can name any
-environment variable you already use. Export the key, check the connection,
-then run the eval:
+### Open Router
 
-```shell
-export SKILLROLL_API_KEY="your-key"
-skillroll doctor
-skillroll eval --case my-skill/evals/first-use.eval.md
-```
+If you don't yet have an spi key provide, [OpenRouter](https://openrouter.ai/) is a great place to start.
+It gives you control over api keys spend, access to almost any model, and free inference on cheap models which is useful for sanity tests.
 
-`doctor` checks the endpoint before the eval spends inference. `eval` prints the
-verdict and the path to a readable report.
+Our go to model is [`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro) which is both cost effective and performant enough for even complex evals.
 
-## OpenRouter as a starting point
-
-[OpenRouter](https://openrouter.ai/) is an optional, simple way to use many
-models through one OpenAI-compatible endpoint. Our current model testing points
-to this practical split:
-
-| Choice | What we found | Use it for |
-| --- | --- | --- |
-| OpenRouter Free | The selected model and availability can change. Results are not stable enough to compare over time. | Checking that setup, tool calls, and the pipeline work. |
-| [`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro) | The best middle ground we found between reliable skill behavior and price. | Prompt development and ongoing CI evals. |
-| A stronger frontier model | More capable on unusually difficult or long cases, at a higher price. | Investigating failures or validating critical changes. |
-
-To use Luna Pro through OpenRouter:
+Setting luna-pro:
 
 ```toml
 [inference]
@@ -165,17 +210,21 @@ model = "openai/gpt-5.6-luna-pro"
 api_key_env = "SKILLROLL_API_KEY"
 ```
 
-OpenRouter Free is a sanity check, not an eval model. For a disposable setup,
-`skillroll init --skills-path skills --openrouter-free` selects it explicitly.
-Do not use its verdicts as regression or release evidence.
+Or the free tier:
+
+```toml
+[inference]
+base_url = "https://openrouter.ai/api/v1"
+model = "openrouter/free"
+api_key_env = "SKILLROLL_API_KEY"
+```
 
 ### Estimated Luna Pro cost per eval
 
-As of August 23, 2026,
+As of August 24, 2026,
 [OpenRouter lists Luna Pro](https://openrouter.ai/openai/gpt-5.6-luna-pro) at
 $0.20 per million input tokens and $1.20 per million output tokens. These
-working estimates use the prompt sizes and action patterns in skillroll's
-bundled cases and include the compatibility check, skill run, Dungeon Master,
+working estimates include the compatibility check, skill run, Dungeon Master,
 and judge:
 
 | Case | Representative billed tokens | Estimated cost |
@@ -188,11 +237,20 @@ Actual cost depends on prompt size, action count, output length, caching, and
 provider pricing. Batch runs share one compatibility check. Add current rates
 to `skillroll.toml` if you want reports to estimate cost from observed usage.
 
+```toml
+[pricing]
+currency = "USD"
+
+[pricing.models."openai/gpt-5.6-luna-pro"]
+input_per_million = 0.20
+output_per_million = 1.20
+```
+
 ## Read the result
 
 Each run is saved under `.skillroll/runs/`. The report explains the verdict,
-shows the observed actions, and points to the failed criteria. `result.json` is
-available for automation and `transcript.jsonl` contains the complete action
+shows the observed actions, and points to failed criteria. `result.json` is
+available for automation; `transcript.jsonl` contains the complete action
 history.
 
 | Outcome | Meaning |
@@ -212,22 +270,26 @@ skillroll init --github-workflow
 
 This writes `.github/workflows/skillroll.yml` without replacing an existing
 workflow. Review it before committing. Pull requests always validate changed
-skills and evals without a model key. To enable model-backed evals for pull
-requests from your own repository, create a `skillroll-eval` environment with
-a secret named by `api_key_env`, then set the `SKILLROLL_LIVE_EVAL` repository
-variable to `true`. Fork pull requests never receive the key.
+skills and evals without a model key.
 
-Start with advisory results. See the [GitHub Actions guide](docs/github-actions.md)
-for manual runs, repository checks, and artifact retention.
+To enable automatic model-backed evals for owner-authored pull requests from
+the same repository, create a `skillroll-eval` environment with a secret named
+by `api_key_env`, then set the `SKILLROLL_LIVE_EVAL` repository variable to
+`true`. Fork pull requests never receive the key.
+
+Start with advisory results. See the
+[GitHub Actions guide](docs/github-actions.md) for manual runs, repository
+checks, and artifact retention.
 
 ## Keep evals small
 
-One case should cover one important behavior. Narrow cases are easier to write,
-read, debug, and run in CI. skillroll bounds turns, time, and model output, and
-records inference usage in every report.
+One case should cover one important behavior. A skill can accumulate as many
+focused cases as it needs. Narrow cases are easier to write, read, debug, and
+run in CI.
 
-Use deterministic rules for exact action results. Let the Dungeon Master handle
-the behavior that would otherwise require mocks or elaborate setup.
+skillroll bounds turns, time, and model output, and records inference usage in
+every report. Use deterministic rules for exact action results. Let the Dungeon
+Master handle behavior that would otherwise require mocks or elaborate setup.
 
 ## Trust and security
 
@@ -235,8 +297,8 @@ skillroll is local, open source infrastructure:
 
 - skillroll has no telemetry, analytics, tracking, or model tracing, and will
   not add them.
-- There is no skillroll account or hosted service. The only model traffic goes
-  to the endpoint you configure when you run `doctor` or an eval.
+- There is no skillroll account or hosted service. Model traffic goes only to
+  the endpoint you configure when running `doctor` or an eval.
 - API keys stay in environment variables. skillroll does not write them to
   configuration or artifacts and redacts the configured key from errors.
 - Run artifacts stay under `.skillroll/runs/` and are ignored by the generated
