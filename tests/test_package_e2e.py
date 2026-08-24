@@ -212,6 +212,29 @@ def test_installed_wheel_initializes_and_validates_spaced_skill_repositories(
     ]
     assert (generic / ".gitignore").read_bytes() == b"# mine\r\n.skillroll/runs/\r\n"
     assert (review / "evals" / "first-use.eval.md").exists()
+    placeholder_validation = _run_installed(environment, generic, "validate", "--all")
+    assert placeholder_validation.returncode == 1
+    assert "starter placeholder text" in placeholder_validation.stdout
+    for starter in (review / "evals").glob("*.eval.md"):
+        starter.write_text(
+            starter.read_text(encoding="utf-8")
+            .replace(
+                "Write the request or task that triggers the skill.",
+                "Review this change.",
+            )
+            .replace(
+                "Describe what the Dungeon Master should simulate: facts the skill "
+                "must discover, people or systems it may interact with, and likely "
+                "action results.",
+                "No external interaction is needed.",
+            )
+            .replace(
+                "Describe one observable behavior that must succeed. Allow equivalent "
+                "actions and wording.",
+                "Explain whether the change is ready.",
+            ),
+            encoding="utf-8",
+        )
     assert _run_installed(environment, generic, "validate", "--all").returncode == 0
     rerun = _run_installed(environment, generic, "init", "--skills-path", "plugins")
     assert rerun.returncode == 0

@@ -30,6 +30,17 @@ from skillroll.repository_io import readable_utf8
 from skillroll.safe_yaml import MetadataError, load_metadata
 
 _REQUIRED_SECTIONS = ("Input", "World", "Success criteria")
+_STARTER_PLACEHOLDERS = {
+    "Input": "Write the request or task that triggers the skill.",
+    "World": (
+        "Describe what the Dungeon Master should simulate: facts the skill must "
+        "discover, people or systems it may interact with, and likely action results."
+    ),
+    "Success criteria": (
+        "- Describe one observable behavior that must succeed. Allow equivalent "
+        "actions and wording."
+    ),
+}
 _RULE_KEYS = frozenset({"name", "tool_name", "arguments", "result"})
 _LIMIT_KEYS = frozenset({"max_turns", "timeout_seconds", "max_output_tokens"})
 _CASE_LIMITS = {"max_turns": 32, "timeout_seconds": 600, "max_output_tokens": 16384}
@@ -60,6 +71,18 @@ def _error(path: Path, summary: str, line: int | None = None) -> Diagnostic:
         affected=path.name,
         location=None if line is None else SourceLocation(path.name, line, 1),
         next_action="Compare this file with an eval created by `skillroll new`.",
+    )
+
+
+def _placeholder_error(path: Path, section: str, line: int) -> Diagnostic:
+    return Diagnostic(
+        "SCG1005",
+        f"The ## {section} section still contains starter placeholder text.",
+        affected=path.name,
+        location=SourceLocation(path.name, line, 1),
+        next_action=(
+            f"Replace the ## {section} placeholder with this case's real content."
+        ),
     )
 
 
@@ -454,6 +477,8 @@ def parse_eval_case(path: Path, skill: Skill) -> ParsedResult[EvalCase]:
             )
         else:
             section_values[section_name] = found[0]
+            if found[0].strip() == _STARTER_PLACEHOLDERS[section_name]:
+                errors.append(_placeholder_error(path, section_name, found[1]))
     if errors:
         return ParsedResult(None, tuple(errors))
     identity = skill.identity / PurePosixPath("evals") / path.name

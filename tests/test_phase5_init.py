@@ -358,6 +358,26 @@ def test_local_command_help_and_missing_inference_explain_the_next_step(
         "base_url, api_key_env, and either model or profiles"
         in (doctor_result.diagnostics[0].details[0])
     )
+    for starter in (repository / "skills" / "review" / "evals").glob("*.eval.md"):
+        starter.write_text(
+            starter.read_text(encoding="utf-8")
+            .replace(
+                "Write the request or task that triggers the skill.",
+                "Review this change.",
+            )
+            .replace(
+                "Describe what the Dungeon Master should simulate: facts the skill "
+                "must discover, people or systems it may interact with, and likely "
+                "action results.",
+                "No external interaction is needed.",
+            )
+            .replace(
+                "Describe one observable behavior that must succeed. Allow equivalent "
+                "actions and wording.",
+                "Explain whether the change is ready.",
+            ),
+            encoding="utf-8",
+        )
     eval_result = evaluate.run(repo=str(repository), environment={})
     assert eval_result.outcome is Outcome.ERROR
     assert eval_result.diagnostics[0].next_action is not None
@@ -375,6 +395,26 @@ def test_local_command_help_and_missing_inference_explain_the_next_step(
         ).outcome
         is Outcome.PASS
     )
+    for starter in (configured / "skills" / "review" / "evals").glob("*.eval.md"):
+        starter.write_text(
+            starter.read_text(encoding="utf-8")
+            .replace(
+                "Write the request or task that triggers the skill.",
+                "Review this change.",
+            )
+            .replace(
+                "Describe what the Dungeon Master should simulate: facts the skill "
+                "must discover, people or systems it may interact with, and likely "
+                "action results.",
+                "No external interaction is needed.",
+            )
+            .replace(
+                "Describe one observable behavior that must succeed. Allow equivalent "
+                "actions and wording.",
+                "Explain whether the change is ready.",
+            ),
+            encoding="utf-8",
+        )
     missing_key = evaluate.run(repo=str(configured), environment={})
     assert missing_key.outcome is Outcome.ERROR
     assert missing_key.diagnostics[0].next_action is not None

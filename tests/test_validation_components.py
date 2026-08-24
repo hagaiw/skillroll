@@ -9,6 +9,7 @@ import pytest
 from skillroll.config import load_config
 from skillroll.discovery import discover_case_files, discover_skills
 from skillroll.evals import parse_eval_case
+from skillroll.initialization.templates import render_starter_case
 from skillroll.models import Skill
 from skillroll.validation import (
     command_result,
@@ -172,6 +173,26 @@ def test_parser_accepts_repository_relative_check_paths_and_direct_case_discover
     parsed = parse_eval_case(direct, skill)
     assert parsed.value is not None
     assert parsed.value.checks[0].covers == (PurePosixPath("scripts/render.py"),)
+
+
+def test_parser_rejects_unchanged_starter_placeholders(tmp_path: Path) -> None:
+    root = write_config(
+        tmp_path / "repository", 'schema_version = 1\nskills_path = "skills"\n'
+    )
+    skill = make_skill(root)
+    path = skill.evals_directory / "starter.eval.md"
+    path.write_bytes(render_starter_case("starter"))
+
+    parsed = parse_eval_case(path, skill)
+
+    assert parsed.value is None
+    assert len(parsed.diagnostics) == 3
+    assert all(
+        "starter placeholder text" in item.summary for item in parsed.diagnostics
+    )
+    assert all(
+        "Replace the ##" in (item.next_action or "") for item in parsed.diagnostics
+    )
 
 
 def test_markdown_links_do_not_gate_validation(tmp_path: Path) -> None:
