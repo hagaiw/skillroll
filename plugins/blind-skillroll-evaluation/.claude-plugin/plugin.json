@@ -1,0 +1,7 @@
+{
+  "name": "blind-skillroll-evaluation",
+  "author": {"name": "SkillRoll"},
+  "description": "Run independent live SkillRoll trials against small external skill repositories.",
+  "version": "0.1.2",
+  "dependencies": [{"name": "flow-runner", "version": "=0.1.2"}]
+}

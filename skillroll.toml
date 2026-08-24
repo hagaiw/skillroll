@@ -7,6 +7,6 @@ model = "openai/gpt-4.1-nano"
 api_key_env = "SKILLROLL_API_KEY"
 
 [inference.limits]
-max_turns = 4
-timeout_seconds = 90
+max_turns = 12
+timeout_seconds = 180
 max_output_tokens = 8192
