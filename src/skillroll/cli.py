@@ -75,7 +75,9 @@ def _parser() -> SkillRollParser:
         "init", help="Set up SkillRoll in a skills repository."
     )
     init_parser.add_argument(
-        "--repo", metavar="PATH", help="Repository directory to set up."
+        "--repo",
+        metavar="PATH",
+        help="Repository directory override; otherwise use the current directory.",
     )
     init_parser.add_argument(
         "--skills-path",
@@ -125,14 +127,29 @@ def _parser() -> SkillRollParser:
     )
     new_parser = commands.add_parser("new", help="Create an eval for a skill.")
     new_parser.add_argument(
-        "target", metavar="SKILL/NAME", help="Skill path and new eval name."
+        "skill",
+        metavar="SKILL_PATH",
+        help="Skill path relative to skills_path.",
     )
     new_parser.add_argument(
-        "--repo", metavar="PATH", help="Repository directory containing SkillRoll."
+        "name",
+        metavar="EVAL_NAME",
+        help="New eval name, in lowercase kebab-case.",
+    )
+    new_parser.add_argument(
+        "--repo",
+        metavar="PATH",
+        help=(
+            "Repository directory override; otherwise use the nearest skillroll.toml."
+        ),
     )
     doctor_parser = commands.add_parser("doctor", help="Check the model connection.")
     doctor_parser.add_argument(
-        "--repo", metavar="PATH", help="Repository directory to inspect."
+        "--repo",
+        metavar="PATH",
+        help=(
+            "Repository directory override; otherwise use the nearest skillroll.toml."
+        ),
     )
     doctor_parser.add_argument(
         "--model-profile",
@@ -140,10 +157,14 @@ def _parser() -> SkillRollParser:
         help="Model profile to use.",
     )
     validate_parser = commands.add_parser(
-        "validate", help="Check skills and evals without using a model."
+        "validate", help="Check evals under the current directory without a model."
     )
     validate_parser.add_argument(
-        "--repo", metavar="PATH", help="Repository directory to validate."
+        "--repo",
+        metavar="PATH",
+        help=(
+            "Repository directory override; otherwise use the nearest skillroll.toml."
+        ),
     )
     selection = validate_parser.add_mutually_exclusive_group()
     selection.add_argument(
@@ -152,8 +173,10 @@ def _parser() -> SkillRollParser:
     selection.add_argument(
         "--case", metavar="PATH", help="Eval-case path relative to skills_path."
     )
-    validate_parser.add_argument(
-        "--all", action="store_true", help="Validate every discovered eval case."
+    selection.add_argument(
+        "--all",
+        action="store_true",
+        help="Validate every discovered eval case in the selected repository.",
     )
     validate_parser.add_argument(
         "--run-commands",
@@ -165,7 +188,11 @@ def _parser() -> SkillRollParser:
     )
     evaluate_parser = commands.add_parser("eval", help="Run skill evals.")
     evaluate_parser.add_argument(
-        "--repo", metavar="PATH", help="Repository directory to evaluate."
+        "--repo",
+        metavar="PATH",
+        help=(
+            "Repository directory override; otherwise use the nearest skillroll.toml."
+        ),
     )
     evaluate_selection = evaluate_parser.add_mutually_exclusive_group()
     evaluate_selection.add_argument(
@@ -174,8 +201,10 @@ def _parser() -> SkillRollParser:
     evaluate_selection.add_argument(
         "--case", metavar="PATH", help="Eval-case path relative to skills_path."
     )
-    evaluate_parser.add_argument(
-        "--all", action="store_true", help="Evaluate every discovered eval case."
+    evaluate_selection.add_argument(
+        "--all",
+        action="store_true",
+        help="Evaluate every discovered eval case in the selected repository.",
     )
     evaluate_parser.add_argument(
         "--run-commands",
@@ -320,7 +349,8 @@ def main(
                     from skillroll.commands import create_case
 
                     result = create_case.run(
-                        target=namespace.target,
+                        skill=namespace.skill,
+                        name=namespace.name,
                         repo=namespace.repo,
                     )
                 elif namespace.command == "validate" and commands is None:
@@ -330,6 +360,7 @@ def main(
                         repo=namespace.repo,
                         skill=namespace.skill,
                         case=namespace.case,
+                        all_cases=namespace.all,
                         run_commands=namespace.run_commands,
                     )
                 elif namespace.command == "eval" and commands is None:
@@ -339,6 +370,7 @@ def main(
                         repo=namespace.repo,
                         skill=namespace.skill,
                         case=namespace.case,
+                        all_cases=namespace.all,
                         run_commands=namespace.run_commands,
                         model_profile=namespace.model_profile,
                         samples=namespace.samples,

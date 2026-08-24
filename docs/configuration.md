@@ -11,8 +11,9 @@ api_key_env = "SKILLROLL_API_KEY"
 ```
 
 The endpoint must provide an OpenAI-compatible Chat Completions API with tool
-calling and strict JSON Schema structured outputs. Run
-`skillroll doctor --repo PATH` before the first eval.
+calling and strict JSON Schema structured outputs. Run `skillroll doctor` from
+the repository (or a nested directory) before the first eval; it finds the
+nearest `skillroll.toml` automatically.
 
 `SKILLROLL_API_KEY` is the provider-neutral default. `api_key_env` can name any
 environment variable you already use. Keep the key itself in your shell or CI

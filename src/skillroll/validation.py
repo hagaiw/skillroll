@@ -19,6 +19,7 @@ from skillroll.models import (
     effective_limits,
 )
 from skillroll.outcomes import Outcome
+from skillroll.paths import is_within
 from skillroll.repository_io import readable_utf8
 
 
@@ -140,12 +141,33 @@ def _limit_findings(
     return tuple(findings)
 
 
+def _path_in_scope(scope: Path | None, path: Path) -> bool:
+    if scope is None:
+        return True
+    return is_within(scope, path.resolve())
+
+
+def _skill_in_scope(scope: Path | None, skill_root: Path) -> bool:
+    if scope is None:
+        return True
+    resolved_skill = skill_root.resolve()
+    return is_within(scope, resolved_skill) or is_within(resolved_skill, scope)
+
+
 def validate_repository(
-    repository_root: Path, selection: Selection | None = None
+    repository_root: Path,
+    selection: Selection | None = None,
+    *,
+    scope: Path | None = None,
 ) -> ValidationReport:
-    """Return every independent problem without running commands or a model."""
+    """Return every independent problem without running commands or a model.
+
+    ``scope`` limits case discovery to a directory inside the repository while
+    keeping the repository configuration and skill discovery boundaries intact.
+    """
     actual_selection = Selection() if selection is None else selection
     root = repository_root.resolve()
+    scope_root = None if scope is None else scope.resolve()
     config_result = load_config(root)
     if config_result.value is None:
         return ValidationReport(
@@ -166,6 +188,19 @@ def validate_repository(
         )
         for item in discovery.diagnostics
     ]
+    if scope_root is not None and not is_within(root, scope_root):
+        findings.append(
+            _finding(
+                Diagnostic(
+                    "SCG1002",
+                    "The validation directory must stay inside this repository.",
+                    affected=scope_root.as_posix(),
+                    next_action=(
+                        "Run validation from the repository or a directory inside it."
+                    ),
+                )
+            )
+        )
     if selected_error is not None:
         findings.append(_finding(selected_error))
     selected_skills = tuple(
@@ -184,9 +219,14 @@ def validate_repository(
     candidate_skills = (
         selected_skills if actual_selection.skill is not None else discovery.skills
     )
+    scoped_skills = tuple(
+        skill for skill in candidate_skills if _skill_in_scope(scope_root, skill.root)
+    )
     cases = []
-    for skill in candidate_skills:
+    for skill in scoped_skills:
         for path in discover_case_files(skill):
+            if not _path_in_scope(scope_root, path):
+                continue
             candidate = parse_eval_case(path, skill)
             if candidate.value is None:
                 findings.extend(_finding(item) for item in candidate.diagnostics)
@@ -208,18 +248,19 @@ def validate_repository(
             )
             findings.append(_finding(diagnostic))
         cases = list(selected_cases)
-        candidate_skills = tuple({case.skill for case in cases})
+        scoped_skills = tuple({case.skill for case in cases})
     parsed_cases = tuple(cases)
     findings.extend(_limit_findings(config, parsed_cases))
     ignored_evals = _ignored_evals_finding(root, parsed_cases)
     if ignored_evals is not None:
         findings.append(ignored_evals)
     if actual_selection.case is None:
-        findings.extend(minimum_case_findings(config, candidate_skills, parsed_cases))
+        findings.extend(minimum_case_findings(config, scoped_skills, parsed_cases))
+    reported_skills = discovery.skills if scope_root is None else scoped_skills
     return ValidationReport(
         root,
         config,
-        discovery.skills,
+        reported_skills,
         parsed_cases,
         tuple(findings),
         discovery.skipped_safe_symlinks,

@@ -34,7 +34,7 @@ def render_gif() -> None:
         hold(pause)
 
     hold(8, cursor=True)
-    type_command("skillroll new ship-pr/wait-for-ci")
+    type_command("skillroll new ship-pr wait-for-ci")
     output(
         ("PASS — Created ship-pr/evals/wait-for-ci.eval.md.", GREEN),
         ("Open it in your editor, then run skillroll eval --case", MUTED),

@@ -135,48 +135,57 @@ skillroll requires Python 3.12 or later and
 uv tool install skillroll
 ```
 
-Interactively setup skillroll and create a `skillroll.toml` at the repo's root.
-It automatically idenitifes the skills folder path and sets up an inference api key
+Set up skillroll interactively and create `skillroll.toml` at the repository
+root. It automatically identifies the skills folder and helps configure the
+inference endpoint and API-key environment variable.
 
 ```shell
 cd /path/to/repository
 skillroll init
 ```
 
-Create a new eval for the `Adventurer` skill called `inspect-before-risky-action`:
+Create a new eval for the `Adventurer` skill called
+`inspect-before-risky-action`:
 
 ```shell
 skillroll new adventurer inspect-before-risky-action
 ```
-This creates `adventurer/evals/inspect-before-risky-action.eval.md` eval template for you to edit.
 
+This creates the eval template
+`adventurer/evals/inspect-before-risky-action.eval.md` for you to edit.
 
-Then validate all evals in the repo using: 
+Then validate all evals in the repository:
+
 ```shell
 skillroll validate
 ```
 
 Make an API key available to skillroll in your current shell:
+
 ```shell
 export SKILLROLL_API_KEY="your-key"
 ```
 
 Check the model connection:
+
 ```shell
 skillroll doctor
 ```
 
 Run all evals under the current working directory:
+
 ```shell
 skillroll eval
 ```
 
-Or just a specific eval (relative to skills folder):
+Or run one specific eval, using its path relative to the skills folder:
+
 ```shell
 skillroll eval --case adventurer/evals/inspect-before-risky-action.eval.md
 ```
 
-The command prints its verdict and saves the report under `repository/.skillroll/runs/`
+The command prints its verdict and saves the report under the repository's
+`.skillroll/runs/` directory.
 
 ## Inference
 
@@ -194,14 +203,18 @@ model = "provider/model-name"
 api_key_env = "SKILLROLL_API_KEY"
 ```
 
-### Open Router
+### OpenRouter
 
-If you don't yet have an spi key provide, [OpenRouter](https://openrouter.ai/) is a great place to start.
-It gives you control over api keys spend, access to almost any model, and free inference on cheap models which is useful for sanity tests.
+If you do not yet have an inference provider,
+[OpenRouter](https://openrouter.ai/) is a great place to start. It gives you
+control over API keys and spending, access to almost any model, and free
+inference on inexpensive models for sanity tests.
 
-Our go to model is [`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro) which is both cost effective and performant enough for even complex evals.
+Our go-to model is
+[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro),
+which is cost-effective and performant enough for even complex evals.
 
-Setting luna-pro:
+To use Luna Pro:
 
 ```toml
 [inference]

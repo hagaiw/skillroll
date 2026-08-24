@@ -51,7 +51,7 @@ from skillroll.models import (
     effective_limits,
 )
 from skillroll.outcomes import Outcome
-from skillroll.repository_io import current_directory
+from skillroll.repository_io import current_directory, find_repository_root
 from skillroll.runtime.attempt import execute_preliminary
 from skillroll.runtime.execution import (
     AgentSkillExecutor,
@@ -1145,6 +1145,7 @@ def run(
     repo: str | None = None,
     skill: str | None = None,
     case: str | None = None,
+    all_cases: bool = False,
     run_commands: bool = False,
     environment: Mapping[str, str] | None = None,
     transport_factory: TransportFactory = _transport,
@@ -1156,7 +1157,7 @@ def run(
     samples: int = 1,
     with_skill_control: bool = False,
 ) -> CommandResult:
-    """Validate before network/process side effects, then run the complete pipeline."""
+    """Resolve the local scope, validate, then run the complete pipeline."""
     if samples < 1 or samples > 10:
         return CommandResult(
             Outcome.ERROR,
@@ -1172,8 +1173,23 @@ def run(
                 ),
             ),
         )
-    root = current_directory() if repo is None else Path(repo)
-    report = validate_repository(root, selection_from_strings(skill, case))
+    if repo is None:
+        working_directory = current_directory()
+        root = find_repository_root(working_directory)
+        scope = (
+            None
+            if all_cases or skill is not None or case is not None
+            else working_directory
+        )
+    else:
+        root = Path(repo)
+        scope = None
+    selection = selection_from_strings(skill, case)
+    report = (
+        validate_repository(root, selection)
+        if scope is None
+        else validate_repository(root, selection, scope=scope)
+    )
     validation = command_result(report)
     if validation.outcome is not Outcome.PASS or report.config is None:
         return validation

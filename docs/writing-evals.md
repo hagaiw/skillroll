@@ -16,11 +16,15 @@ important behavior.
 
 ## Start with a behavior
 
-Create a case from the configured repository root:
+Create a case from the configured repository:
 
 ```shell
-skillroll new my-skill/wait-for-ci
+skillroll new my-skill wait-for-ci
 ```
+
+When run from a nested directory, `new` walks up to the nearest
+`skillroll.toml`, so the same command works there. Use `--repo PATH` when you
+want to select a different repository explicitly.
 
 SkillRoll creates `my-skill/evals/wait-for-ci.eval.md` without replacing
 existing work. Fill its three sections:
@@ -74,12 +78,21 @@ Turn a prompt failure into a case before fixing it:
 5. Fix the skill and run the case again.
 6. Keep the case to catch the regression in future changes.
 
-Validate the case before spending model calls, then run it and read the report:
+Validate the evals below your current directory before spending model calls,
+then run the case and read the report:
 
 ```shell
-skillroll validate --repo PATH --case SKILL/evals/CASE.eval.md
-skillroll eval --repo PATH --case SKILL/evals/CASE.eval.md
+skillroll validate
+skillroll eval --case SKILL/evals/CASE.eval.md
 ```
+
+`validate` finds the nearest `skillroll.toml`. Run it from the repository root
+to validate every configured eval, from a skill directory to validate that
+skill's evals, or use `--all` to request the whole repository explicitly.
+Use `--case` when you need a single targeted check.
+
+`eval` uses the same nearest-config lookup. A bare run evaluates cases below
+the current directory; use `--all` to evaluate every configured case.
 
 If the result is surprising, inspect the transcript. Change the skill when its
 behavior is wrong. Change the case when its Input, World, or criteria do not
@@ -137,7 +150,7 @@ For an important case, run independent samples. You can also run the same case
 without the skill:
 
 ```shell
-skillroll eval --repo PATH --case CASE --samples 3 --with-skill-control
+skillroll eval --case CASE --samples 3 --with-skill-control
 ```
 
 That comparison is a diagnostic, not another gate. If both variants pass, the

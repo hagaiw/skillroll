@@ -18,7 +18,7 @@ from skillroll.diagnostics import CommandResult, Diagnostic
 from skillroll.inference.profile import SecretRedactor, SecretValue
 from skillroll.models import EvalCase
 from skillroll.outcomes import Outcome
-from skillroll.repository_io import current_directory
+from skillroll.repository_io import current_directory, find_repository_root
 from skillroll.validation import (
     command_result,
     selection_from_strings,
@@ -31,14 +31,35 @@ def run(
     repo: str | None = None,
     skill: str | None = None,
     case: str | None = None,
+    all_cases: bool = False,
     run_commands: bool = False,
     environment: Mapping[str, str] | None = None,
     runner: CheckRunner | None = None,
     selected_cases: tuple[EvalCase, ...] | None = None,
 ) -> CommandResult:
-    """Validate one explicitly selected repository without running its code."""
-    root = current_directory() if repo is None else Path(repo)
-    report = validate_repository(root, selection_from_strings(skill, case))
+    """Validate evals without inference or repository commands by default.
+
+    A bare command uses the nearest ``skillroll.toml`` and limits discovery to
+    the current working directory. Explicit selections and ``all_cases`` keep
+    the existing repository-wide and targeted workflows available.
+    """
+    if repo is None:
+        working_directory = current_directory()
+        root = find_repository_root(working_directory)
+        scope = (
+            None
+            if all_cases or skill is not None or case is not None
+            else working_directory
+        )
+    else:
+        root = Path(repo)
+        scope = None
+    selection = selection_from_strings(skill, case)
+    report = (
+        validate_repository(root, selection)
+        if scope is None
+        else validate_repository(root, selection, scope=scope)
+    )
     base = command_result(report)
     if base.outcome is not Outcome.PASS or report.config is None:
         return base

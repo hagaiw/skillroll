@@ -82,6 +82,8 @@ def test_missing_command_is_normalized() -> None:
     [
         ("unknown",),
         ("eval", "--unknown"),
+        ("eval", "--all", "--case", "review/evals/one.eval.md"),
+        ("validate", "--all", "--skill", "review"),
         ("--output",),
         ("--output", "xml", "eval"),
     ],

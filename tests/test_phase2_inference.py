@@ -234,6 +234,24 @@ def test_doctor_is_two_request_preflight_without_skill_or_writes(
     assert "private/key" not in str(result)
 
 
+def test_doctor_finds_the_nearest_repository_from_a_nested_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = write_repository(tmp_path / "repository")
+    nested = repository / "skills" / "nested"
+    nested.mkdir()
+    monkeypatch.chdir(nested)
+    transport = FakeTransport(valid_responses())
+
+    result = doctor.run(
+        environment={"KEY": "private/key value"},
+        transport_factory=lambda _: transport,
+    )
+
+    assert result.outcome is Outcome.PASS
+    assert transport.closed
+
+
 def test_doctor_explains_missing_key_without_reading_a_secret(tmp_path: Path) -> None:
     result = doctor.run(
         repo=str(write_repository(tmp_path / "repository")), environment={}

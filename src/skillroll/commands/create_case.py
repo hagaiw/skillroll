@@ -11,7 +11,7 @@ from skillroll.initialization.templates import render_starter_case
 from skillroll.initialization.transaction import PlannedWrite, TransactionError, commit
 from skillroll.outcomes import Outcome
 from skillroll.paths import parse_relative_path, resolve_child
-from skillroll.repository_io import current_directory
+from skillroll.repository_io import find_repository_root
 
 _CASE_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -24,19 +24,18 @@ def _error(summary: str, action: str, *, affected: str | None = None) -> Command
     )
 
 
-def _target(value: str) -> tuple[PurePosixPath, str] | None:
-    parsed = parse_relative_path(value)
-    if parsed is None or len(parsed.parts) < 2:
-        return None
-    name = parsed.name.removesuffix(".eval.md")
-    if _CASE_NAME.fullmatch(name) is None:
-        return None
-    return parsed.parent, name
+def _skill_path(value: str) -> PurePosixPath | None:
+    return parse_relative_path(value)
 
 
-def run(*, target: str, repo: str | None = None) -> CommandResult:
+def _eval_name(value: str) -> str | None:
+    name = value.removesuffix(".eval.md")
+    return name if _CASE_NAME.fullmatch(name) is not None else None
+
+
+def run(*, skill: str, name: str, repo: str | None = None) -> CommandResult:
     """Create one no-overwrite case template under ``SKILL/evals``."""
-    root = current_directory() if repo is None else Path(repo)
+    root = find_repository_root() if repo is None else Path(repo)
     parsed_config = load_config(root)
     if parsed_config.value is None:
         return CommandResult(
@@ -44,14 +43,20 @@ def run(*, target: str, repo: str | None = None) -> CommandResult:
             "SkillRoll needs a valid local setup before it can create a case.",
             parsed_config.diagnostics,
         )
-    selected = _target(target)
-    if selected is None:
+    skill_path = _skill_path(skill)
+    if skill_path is None:
         return _error(
-            "The new eval target must look like SKILL/NAME.",
-            "Use a lowercase name such as refund/eligible-order.",
-            affected=target,
+            "The skill path must be a relative path inside skills_path.",
+            "Use a skill path such as refund or plugins/review.",
+            affected=skill,
         )
-    skill_path, case_name = selected
+    case_name = _eval_name(name)
+    if case_name is None:
+        return _error(
+            "The eval name must use lowercase letters, numbers, and hyphens.",
+            "Use a name such as eligible-order.",
+            affected=name,
+        )
     config = parsed_config.value
     skill_directory = resolve_child(config.skills_root, skill_path)
     if (

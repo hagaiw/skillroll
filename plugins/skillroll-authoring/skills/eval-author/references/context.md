@@ -109,7 +109,7 @@ Run independent samples when a case matters enough to measure stability. The
 optional no-skill comparison runs the same case without the selected `SKILL.md`:
 
 ```shell
-skillroll eval --repo /path/to/repo --case path/to/case.eval.md \
+skillroll eval --case path/to/case.eval.md \
   --samples 3 --with-skill-control
 ```
 

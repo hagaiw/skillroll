@@ -278,6 +278,35 @@ def test_selection_paths_and_outcomes_are_reported(tmp_path: Path) -> None:
     assert selection_from_strings(None, "review/evals/one.eval.md").case is not None
 
 
+def test_validation_scope_limits_cases_to_the_current_directory(
+    tmp_path: Path,
+) -> None:
+    root = write_config(
+        tmp_path / "repository", 'schema_version = 1\nskills_path = "skills"\n'
+    )
+    review = make_skill(root, "review")
+    other = make_skill(root, "other")
+    (review.evals_directory / "one.eval.md").write_text(valid_case(), encoding="utf-8")
+    (other.evals_directory / "one.eval.md").write_text(valid_case(), encoding="utf-8")
+
+    report = validate_repository(root, scope=review.evals_directory)
+
+    assert report.skills == (review,)
+    assert [case.identity.as_posix() for case in report.cases] == [
+        "review/evals/one.eval.md"
+    ]
+
+    nested_scope = review.evals_directory / "nested"
+    nested_scope.mkdir()
+    assert validate_repository(root, scope=nested_scope).cases == ()
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_report = validate_repository(root, scope=outside)
+    assert command_result(outside_report).outcome.name == "ERROR"
+    assert any(item.diagnostic.code == "SCG1002" for item in outside_report.findings)
+
+
 def test_case_limits_are_checked_against_configured_profile_offline(
     tmp_path: Path,
 ) -> None:

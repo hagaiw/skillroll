@@ -78,3 +78,16 @@ def readable_utf8(path: Path) -> str | None:
 def current_directory() -> Path:
     """Boundary to make the CLI default root easy to control in tests."""
     return Path(os.getcwd())
+
+
+def find_repository_root(start: Path | None = None) -> Path:
+    """Find the nearest ancestor containing ``skillroll.toml``.
+
+    The search is read-only and falls back to the starting directory so the
+    caller can preserve the normal missing-configuration diagnostic.
+    """
+    current = (current_directory() if start is None else start).resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / "skillroll.toml").is_file():
+            return candidate
+    return current

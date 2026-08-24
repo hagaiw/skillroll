@@ -156,7 +156,7 @@ def test_init_creates_minimal_local_files_and_templates(tmp_path: Path) -> None:
         encoding="utf-8"
     ) == ".skillroll/runs/\n"
     starter = (skill / "evals" / "first-use.eval.md").read_text(encoding="utf-8")
-    assert "Write a realistic request" in starter
+    assert "Write the request or task that triggers the skill" in starter
     assert "Dungeon Master" in starter
 
 

@@ -1802,6 +1802,49 @@ def test_run_validates_sample_bounds_and_reports_experiment_summary(
     )
 
 
+def test_eval_finds_nearest_config_and_scopes_bare_runs_to_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    (repository / "skillroll.toml").write_text(
+        'schema_version = 1\nskills_path = "."\n', encoding="utf-8"
+    )
+    case = case_at(repository)
+    config = SkillRollConfig(
+        repository,
+        PurePosixPath("."),
+        repository,
+        GuardSettings(),
+        None,
+        repository / "skillroll.toml",
+    )
+    report = ValidationReport(repository, config, (case.skill,), (case,), (), ())
+    seen: list[tuple[Path, Path | None]] = []
+
+    def checked(
+        root: Path, _: object, *, scope: Path | None = None
+    ) -> ValidationReport:
+        seen.append((root, scope))
+        return report
+
+    monkeypatch.setattr(evaluate, "validate_repository", checked)
+    monkeypatch.setattr(
+        evaluate,
+        "command_result",
+        lambda _: CommandResult(Outcome.ERROR, "stop before inference"),
+    )
+    nested = repository / "skills" / "review" / "evals"
+    monkeypatch.chdir(nested)
+
+    scoped = evaluate.run(environment={})
+    all_cases = evaluate.run(environment={}, all_cases=True)
+
+    assert scoped.outcome is Outcome.ERROR
+    assert all_cases.outcome is Outcome.ERROR
+    assert seen == [(repository, nested), (repository, None)]
+
+
 def test_evaluate_records_judge_failure_as_a_semantic_stage_error(
     tmp_path: Path,
 ) -> None:

@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from conftest import run_module
+
+from skillroll.commands import validate
+from skillroll.outcomes import Outcome
 
 
 def write_repository(root: Path, *, config: str | None = None) -> Path:
@@ -43,6 +47,60 @@ def test_validate_complete_repository_and_json_data(tmp_path: Path) -> None:
         "review/evals/edge.eval.md",
         "review/evals/ordinary.eval.md",
     ]
+
+
+def test_validate_defaults_to_evals_under_the_current_working_directory(
+    tmp_path: Path,
+) -> None:
+    repository = write_repository(tmp_path / "repository")
+    other_evals = repository / "skills" / "other" / "evals"
+    other_evals.mkdir(parents=True)
+    (other_evals.parent / "SKILL.md").write_text("# Other\n", encoding="utf-8")
+    (other_evals / "one.eval.md").write_text(
+        (repository / "skills" / "review" / "evals" / "ordinary.eval.md").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    working_directory = repository / "skills" / "review" / "evals"
+
+    scoped = run_module("--output", "json", "validate", cwd=working_directory)
+
+    assert scoped.returncode == 0
+    scoped_result = json.loads(scoped.stdout)
+    assert scoped_result["data"]["skills"] == ["review"]
+    assert scoped_result["data"]["cases"] == [
+        "review/evals/edge.eval.md",
+        "review/evals/ordinary.eval.md",
+    ]
+
+    all_cases = run_module(
+        "--output", "json", "validate", "--all", cwd=working_directory
+    )
+
+    assert all_cases.returncode == 0
+    all_result = json.loads(all_cases.stdout)
+    assert all_result["data"]["skills"] == ["other", "review"]
+    assert all_result["data"]["cases"] == [
+        "other/evals/one.eval.md",
+        "review/evals/edge.eval.md",
+        "review/evals/ordinary.eval.md",
+    ]
+
+
+def test_validate_function_defaults_to_the_current_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = write_repository(tmp_path / "repository")
+    monkeypatch.chdir(repository / "skills" / "review" / "evals")
+
+    result = validate.run()
+
+    assert result.outcome is Outcome.PASS
+    assert result.data["cases"] == (
+        "review/evals/edge.eval.md",
+        "review/evals/ordinary.eval.md",
+    )
 
 
 def test_validate_reports_missing_section_and_policy_failure(tmp_path: Path) -> None:

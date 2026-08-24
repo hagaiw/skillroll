@@ -17,7 +17,7 @@ from skillroll.inference.profile import (
     resolve_inference_candidates,
 )
 from skillroll.outcomes import Outcome
-from skillroll.repository_io import current_directory
+from skillroll.repository_io import current_directory, find_repository_root
 
 if TYPE_CHECKING:
     from skillroll.inference.preflight import PreflightResult
@@ -114,8 +114,8 @@ def run(
     transport_factory: TransportFactory = _default_transport,
     model_profile: str | None = None,
 ) -> CommandResult:
-    """Run no more than the two endpoint requests required by preflight."""
-    root = current_directory() if repo is None else Path(repo)
+    """Find the local config, then run no more than two preflight requests."""
+    root = find_repository_root(current_directory()) if repo is None else Path(repo)
     parsed = load_config(root)
     if parsed.value is None:
         return CommandResult(
