@@ -61,6 +61,10 @@ def test_dogfood_skills_and_cases_validate_without_making_marketplace_required()
     assert report.config.skills_path.as_posix() == "plugins"
     assert report.config.inference is not None
     assert report.config.inference.model == "openai/gpt-4.1-nano"
+    assert report.config.inference.default_profile == "dogfood"
+    assert report.config.inference.profiles["blind-live"].models == (
+        "openai/gpt-5.6-luna-pro",
+    )
     assert not report.findings
     assert len(report.skills) == 18
     assert len(report.cases) == 55

@@ -9,6 +9,10 @@ Use a narrow artifact at each boundary:
 3. Blind authoring returns frozen case paths and hashes without prior outcomes.
 4. Live running returns immutable run evidence and classifications.
 
+In the SkillRoll repository, select the `blind-live` model profile for these
+multi-step cases. In an adopter repository, use an equivalently reviewed named
+stable model rather than a free or changing route.
+
 Parallelize independent targets when the platform and authorization allow it.
 Do not share one target's outcomes with another target's authoring worker. The
 coordinator may receive all completed artifacts for final synthesis.
