@@ -1,7 +1,13 @@
+---
+layout: default
+title: SkillRoll documentation
+---
+
 # Documentation
 
 SkillRoll is a drop-in eval harness for skills repositories. Start with the
-[README](../README.md) to install it and run one Markdown case.
+[README](https://github.com/hagaiw/skillroll#readme) to install it and run one
+Markdown case.
 
 Then follow the part of the loop you need:
 
@@ -16,9 +22,11 @@ Then follow the part of the loop you need:
    command, and artifact can access.
 
 For a short real-world walkthrough, read
-[From prompt bug to regression guard](case-study-testing-skill-decisions.md).
+[Testing Agent Skills with TDD and audits](https://hagaiw.github.io/skillroll/case-study-testing-skill-decisions/).
 
-Project policies live in [CONTRIBUTING.md](../.github/CONTRIBUTING.md),
-[SECURITY.md](../.github/SECURITY.md),
-[SUPPORT.md](../.github/SUPPORT.md), and
-[GOVERNANCE.md](../.github/GOVERNANCE.md).
+Project policies live in
+[CONTRIBUTING.md](https://github.com/hagaiw/skillroll/blob/main/.github/CONTRIBUTING.md),
+[SECURITY.md](https://github.com/hagaiw/skillroll/blob/main/.github/SECURITY.md),
+[SUPPORT.md](https://github.com/hagaiw/skillroll/blob/main/.github/SUPPORT.md),
+and
+[GOVERNANCE.md](https://github.com/hagaiw/skillroll/blob/main/.github/GOVERNANCE.md).
