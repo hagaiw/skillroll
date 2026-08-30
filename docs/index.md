@@ -15,6 +15,9 @@ Then follow the part of the loop you need:
 5. [Review the security model](security.md): understand what each model stage,
    command, and artifact can access.
 
+For a short real-world walkthrough, read
+[From prompt bug to regression guard](case-study-testing-skill-decisions.md).
+
 Project policies live in [CONTRIBUTING.md](../.github/CONTRIBUTING.md),
 [SECURITY.md](../.github/SECURITY.md),
 [SUPPORT.md](../.github/SUPPORT.md), and
