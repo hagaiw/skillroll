@@ -22,7 +22,7 @@ Then follow the part of the loop you need:
    command, and artifact can access.
 
 For a short real-world walkthrough, read
-[Testing Agent Skills with TDD and audits](https://hagaiw.github.io/skillroll/case-study-testing-skill-decisions/).
+[Testing a Vercel Agent Skill with SkillRoll](https://hagaiw.github.io/skillroll/case-study-testing-skill-decisions/).
 
 Project policies live in
 [CONTRIBUTING.md](https://github.com/hagaiw/skillroll/blob/main/.github/CONTRIBUTING.md),
