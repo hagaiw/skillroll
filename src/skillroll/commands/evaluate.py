@@ -64,6 +64,7 @@ from skillroll.validation import (
     validate_repository,
 )
 from skillroll.verdicts import CaseResult, aggregate, case_outcome
+from skillroll.world.bundle import BundleWarning
 from skillroll.world.session import MAX_WORLD_ACTIONS_PER_CASE, WorldEvent
 
 TransportFactory = Callable[[ResolvedInference], ChatTransport]
@@ -107,6 +108,46 @@ def _usage(values: tuple[ModelUsage, ...] | ModelUsage | None) -> object:
         }
     assert values is None
     return None
+
+
+def _warning_data(
+    values: tuple[BundleWarning, ...],
+) -> tuple[Mapping[str, JSONValue], ...]:
+    """Render bundle advisories for command and experiment result data."""
+    return tuple(
+        {
+            "path": item.path.as_posix(),
+            "bytes": item.size,
+            "summary": item.summary,
+        }
+        for item in values
+    )
+
+
+def _case_warning_data(
+    values: tuple[CaseResult, ...],
+) -> tuple[Mapping[str, JSONValue], ...]:
+    """Attach each unique selected-skill advisory to its first case."""
+    records: list[Mapping[str, JSONValue]] = []
+    seen: set[tuple[str, str]] = set()
+    for result in values:
+        skill = result.case.skill.identity.as_posix()
+        for warning in result.warnings:
+            path = warning.path.as_posix()
+            key = (skill, path)
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append(
+                {
+                    "skill": skill,
+                    "case": result.case.identity.as_posix(),
+                    "path": path,
+                    "bytes": warning.size,
+                    "summary": warning.summary,
+                }
+            )
+    return tuple(records)
 
 
 def _usage_records(
@@ -345,6 +386,7 @@ def _result_summary(
     profile_name: str | None = None,
     profile_purpose: str | None = None,
     skill_available: bool = True,
+    warnings: tuple[BundleWarning, ...] = (),
 ) -> dict[str, object]:
     overall_explanation, next_action = _overall_text(
         outcome, judged, assertions, checks, failure
@@ -393,7 +435,7 @@ def _result_summary(
         )
     )
     execution_status = "completed" if execution_present else "not_completed"
-    return {
+    summary: dict[str, object] = {
         "skill": case.skill.identity.as_posix(),
         "case": case.identity.as_posix(),
         "overall": {
@@ -446,6 +488,9 @@ def _result_summary(
             pricing_currency,
         ),
     }
+    if warnings:
+        summary["warnings"] = _warning_data(warnings)
+    return summary
 
 
 def _assertions(values: tuple[AssertionResult, ...]) -> list[dict[str, object]]:
@@ -702,6 +747,7 @@ async def evaluate_repository(
                 preliminary.artifact_directory,
                 events,
                 skill_available,
+                preliminary.warnings,
             )
             if directory is not None:
                 try:
@@ -745,6 +791,7 @@ async def evaluate_repository(
                         profile_name=profile.profile_name,
                         profile_purpose=profile.profile_purpose,
                         skill_available=skill_available,
+                        warnings=preliminary.warnings,
                     )
                     store.append(
                         directory,
@@ -790,6 +837,7 @@ async def evaluate_repository(
                                     model_profile=profile.profile_name,
                                     model_profile_purpose=profile.profile_purpose,
                                     skill_available=skill_available,
+                                    warnings=preliminary.warnings,
                                 ),
                             ),
                         )
@@ -811,6 +859,7 @@ async def evaluate_repository(
                         preliminary.artifact_directory,
                         events,
                         skill_available,
+                        preliminary.warnings,
                     )
             results.append(result)
         return tuple(results)
@@ -1066,6 +1115,7 @@ async def evaluate_experiment(
         "with_skill_control": with_skill_control,
         "skill_runs": _outcome_counts(skill_runs),
         "skill_control_runs": _outcome_counts(control_runs),
+        "warnings": _case_warning_data(skill_runs),
         "paired_comparisons": [
             {
                 "sample": pair.sample,
@@ -1307,6 +1357,23 @@ def run(
             for check in item.checks
             if check.outcome in {"FAIL", "ERROR"}
         )
+        + tuple(
+            Diagnostic(
+                "SCW1001",
+                warning.summary,
+                affected=(
+                    f"{item.case.identity.as_posix()}: {warning.path.as_posix()}"
+                ),
+                details=(f"Indexed bytes: {warning.size}",),
+                next_action=(
+                    "Keep the skill focused or move supporting material into a "
+                    "separate reference file if model context or cost becomes a "
+                    "concern."
+                ),
+            )
+            for item in case_results
+            for warning in item.warnings
+        )
     )
     outcome_counts = {
         value: sum(item.outcome == value for item in case_results)
@@ -1337,6 +1404,16 @@ def run(
             for item in case_results
         ),
     }
+    warning_data = _case_warning_data(case_results)
+    warning_suffix = (
+        " Warning: evaluation continued with "
+        f"{len(warning_data)} unique large SKILL.md file."
+        if len(warning_data) == 1
+        else " Warning: evaluation continued with "
+        f"{len(warning_data)} unique large SKILL.md files."
+        if warning_data
+        else ""
+    )
     if len(case_results) == 1 and experiment is None:
         case_result = case_results[0]
         summary_text = {
@@ -1345,7 +1422,9 @@ def run(
             "INCOMPLETE": " needs a repository check that did not run.",
             "ERROR": " could not produce a trustworthy result.",
         }[case_result.outcome]
-        summary_text = case_result.case.identity.as_posix() + summary_text
+        summary_text = (
+            case_result.case.identity.as_posix() + summary_text + warning_suffix
+        )
     else:
         counts = (
             ("passed", outcome_counts["PASS"]),
@@ -1355,7 +1434,9 @@ def run(
         )
         count_text = ", ".join(f"{count} {label}" for label, count in counts if count)
         subject = "sampled runs" if experiment is not None else "evals"
-        summary_text = f"Ran {len(case_results)} {subject}: {count_text}."
+        summary_text = (
+            f"Ran {len(case_results)} {subject}: {count_text}." + warning_suffix
+        )
     if experiment is not None:
         report_text = (
             " Report: " + experiment.artifact_directory.as_posix() + "/report.md."
@@ -1387,6 +1468,7 @@ def run(
             "outcome_counts": outcome_counts,
             "semantic_judgment_counts": semantic_counts,
             "trusted_check_counts": trusted_counts,
+            "warnings": warning_data,
             **(
                 {}
                 if experiment is None

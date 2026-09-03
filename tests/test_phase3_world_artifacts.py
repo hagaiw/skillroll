@@ -59,6 +59,7 @@ from skillroll.runtime.execution import (
 from skillroll.world import bundle as bundle_module
 from skillroll.world.bundle import (
     MAX_READABLE_BYTES,
+    SKILL_WARNING_BYTES,
     BundleError,
     _walk,
     build_bundle,
@@ -314,39 +315,71 @@ def test_bundle_excludes_eval_metadata_hidden_and_generated_dependencies(
     assert bundle_read(index, "Read", {"path": "__pycache__/cached.pyc"}) is None
 
 
-def test_bundle_limits_and_changed_files_fall_through(
+def test_bundle_keeps_file_count_and_changed_files_safe(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = tmp_path / "skill"
     skill_at(root)
+    (root / "SKILL.md").write_bytes(b"x" * SKILL_WARNING_BYTES)
     (root / "a").write_bytes(b"abc")
     monkeypatch.setattr(bundle_module, "MAX_FILES", 1)
     with pytest.raises(BundleError, match="files"):
         build_bundle(root)
     monkeypatch.setattr(bundle_module, "MAX_FILES", 512)
-    monkeypatch.setattr(bundle_module, "MAX_TOTAL_BYTES", 1)
-    with pytest.raises(BundleError, match="bytes"):
-        build_bundle(root)
-    monkeypatch.setattr(bundle_module, "MAX_TOTAL_BYTES", 4 * 1024 * 1024)
+    (root / "large.md").write_bytes(b"x" * (4 * 1024 * 1024 + 1))
+    (root / "media.bin").write_bytes(b"\x00" + b"x" * (1024 * 1024))
     index = build_bundle(root)
+    assert index.file(PurePosixPath("large.md")) is not None
+    assert index.file(PurePosixPath("media.bin")) is not None
+    assert [(item.path.as_posix(), item.size) for item in index.warnings] == [
+        ("SKILL.md", SKILL_WARNING_BYTES)
+    ]
     (root / "a").write_bytes(b"changed")
     assert bundle_read(index, "Read", {"path": "a"}) is None
     (root / "a").write_bytes(b"x" * (MAX_READABLE_BYTES + 1))
     assert bundle_read(index, "Read", {"path": "a"}) is None
 
 
-def test_binary_assets_do_not_consume_readable_text_budget(
+def test_bundle_indexing_does_not_read_entire_files_at_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = tmp_path / "skill"
     skill_at(root)
-    (root / "font.ttf").write_bytes(b"\x00" + b"font" * 100)
-    monkeypatch.setattr(bundle_module, "MAX_TOTAL_BYTES", 1024)
+    (root / "large.md").write_bytes(b"x" * (2 * 1024 * 1024))
+    original_read_bytes = Path.read_bytes
+
+    def forbidden_read(path: Path) -> bytes:
+        del path
+        raise AssertionError("bundle indexing must stream files")
+
+    monkeypatch.setattr(Path, "read_bytes", forbidden_read)
     index = build_bundle(root)
-    assert index.file(PurePosixPath("font.ttf")) is not None
-    monkeypatch.setattr(bundle_module, "MAX_BINARY_BYTES", 1)
-    with pytest.raises(BundleError, match="binary asset"):
-        build_bundle(root)
+    assert index.file(PurePosixPath("large.md")) is not None
+    monkeypatch.setattr(Path, "read_bytes", original_read_bytes)
+
+
+def test_stream_file_closes_a_non_regular_descriptor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    closed: list[int] = []
+
+    def fake_open(*_args: object) -> int:
+        return 37
+
+    def fake_fstat(_descriptor: int) -> SimpleNamespace:
+        return SimpleNamespace(st_mode=stat.S_IFDIR)
+
+    def fake_close(descriptor: int) -> None:
+        closed.append(descriptor)
+
+    monkeypatch.setattr(bundle_module.os, "open", fake_open)
+    monkeypatch.setattr(bundle_module.os, "fstat", fake_fstat)
+    monkeypatch.setattr(bundle_module.os, "close", fake_close)
+
+    with pytest.raises(OSError, match="not a regular file"):
+        bundle_module._stream_file(Path("ignored"))
+
+    assert closed == [37]
 
 
 def test_history_prompt_and_model_response_contract() -> None:
@@ -1187,14 +1220,14 @@ def test_phase3_remaining_safety_branches(
     (root / "second").write_text("2", encoding="utf-8")
     assert len(build_bundle(root).files) >= 3
     (root / "fault").write_text("x", encoding="utf-8")
-    original_read = Path.read_bytes
+    original_stream = bundle_module._stream_file
 
-    def failing_read(path: Path) -> bytes:
+    def failing_stream(path: Path) -> tuple[int, str]:
         if path.name == "fault":
             raise OSError()
-        return original_read(path)
+        return original_stream(path)
 
-    monkeypatch.setattr(Path, "read_bytes", failing_read)
+    monkeypatch.setattr(bundle_module, "_stream_file", failing_stream)
     with pytest.raises(BundleError, match="could not read"):
         build_bundle(root)
     monkeypatch.undo()

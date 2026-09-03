@@ -135,6 +135,13 @@ model turns, so leave one for the final response after any actions.
 `max_output_tokens` applies to the skill run, Dungeon Master, and judge.
 Raise a limit only when the intended behavior needs it.
 
+SkillRoll warns when the selected `SKILL.md` is 128 KiB or larger, but it
+continues the evaluation. Supporting files are indexed incrementally, so a
+large reference or media file does not block the run. The `Read` action still
+returns only UTF-8 files up to 64 KiB; larger files remain available for
+identity and safety checks but are not placed in the model's action history.
+The bundle still accepts at most 512 regular files.
+
 Each simulated external action uses a model turn. Reserve one turn for the
 skill's final response. If a case is about a decision process rather than the
 contents of a repository or service, make it text-only instead of encouraging

@@ -82,6 +82,7 @@ from skillroll.runtime.execution import (
     wrapped_instructions,
 )
 from skillroll.verdicts import CaseResult, aggregate, case_outcome
+from skillroll.world.bundle import SKILL_WARNING_BYTES, BundleWarning
 from skillroll.world.session import WorldEvent
 
 
@@ -1514,6 +1515,95 @@ def test_evaluate_repository_runs_one_preflight_execution_judge_and_check(
     assert transport.closed
 
 
+def test_large_skill_warning_is_recorded_without_changing_verdict(
+    tmp_path: Path,
+) -> None:
+    case = case_at(tmp_path)
+    case.skill.skill_file.write_bytes(b"x" * SKILL_WARNING_BYTES)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings("https://example.test/v1", "tiny", "KEY"),
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+    transport = ScriptedTransport(preflight_responses())
+    result = asyncio.run(
+        evaluate.evaluate_repository(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            transport_factory=lambda _: transport,
+            executor_factory=lambda _: Executor(),
+        )
+    )
+    assert not isinstance(result, InferenceFailure)
+    assert result[0].outcome == "PASS"
+    assert len(result[0].warnings) == 1
+    directory = tmp_path / result[0].artifact_directory
+    run_record = json.loads((directory / "run.json").read_text(encoding="utf-8"))
+    assert run_record["warnings"][0]["bytes"] == SKILL_WARNING_BYTES
+    assert "Evaluation continues" in run_record["warnings"][0]["summary"]
+    assert "## Warnings" in (directory / "report.md").read_text(encoding="utf-8")
+
+
+def test_aggregate_warnings_deduplicate_repeated_samples_and_cases(
+    tmp_path: Path,
+) -> None:
+    first = case_at(tmp_path)
+    second_path = first.skill.evals_directory / "second.eval.md"
+    second_path.write_text("case", encoding="utf-8")
+    second = replace(
+        first,
+        path=second_path,
+        identity=PurePosixPath("skills/review/evals/second.eval.md"),
+    )
+    warning = BundleWarning(PurePosixPath("SKILL.md"), SKILL_WARNING_BYTES)
+    results = tuple(
+        CaseResult(case, "PASS", None, None, (), (), None, None, (), True, (warning,))
+        for case in (first, second, first)
+    )
+
+    records = evaluate._case_warning_data(results)
+
+    assert len(records) == 1
+    assert records[0]["skill"] == "skills/review"
+    assert records[0]["case"] == "skills/review/evals/basic.eval.md"
+
+
+def test_experiment_report_keeps_context_for_warnings_from_multiple_skills() -> None:
+    report = experiment_report_bytes(
+        {
+            "warnings": [
+                "ignore malformed warning",
+                {
+                    "skill": "skills/no-case",
+                    "summary": "no case context",
+                },
+                {
+                    "skill": "skills/review",
+                    "case": "skills/review/evals/basic.eval.md",
+                    "summary": "review is large",
+                },
+                {
+                    "skill": "skills/other",
+                    "case": "skills/other/evals/basic.eval.md",
+                    "summary": "other is large",
+                },
+            ]
+        }
+    ).decode()
+
+    assert "Skill `skills/review`" in report
+    assert "Skill `skills/other`" in report
+    assert "Skill `skills/no-case`: no case context" in report
+    assert "ignore malformed warning" not in report
+    assert "review is large" in report and "other is large" in report
+
+
 def test_authoring_experiment_pairs_skill_and_omission_runs(tmp_path: Path) -> None:
     case = case_at(tmp_path)
     config = SkillRollConfig(
@@ -1800,6 +1890,38 @@ def test_run_validates_sample_bounds_and_reports_experiment_summary(
     assert result.data["experiment_artifact_directory"] == (
         ".skillroll/experiments/experiment-id"
     )
+
+
+def test_run_surfaces_large_skill_warning_without_changing_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = case_at(tmp_path)
+    warning = BundleWarning(PurePosixPath("SKILL.md"), SKILL_WARNING_BYTES)
+    selected = CaseResult(
+        case, "PASS", None, None, (), (), None, None, (), True, (warning,)
+    )
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        None,
+        tmp_path / "skillroll.toml",
+    )
+    report = ValidationReport(tmp_path, config, (case.skill,), (case,), (), ())
+    monkeypatch.setattr(evaluate, "validate_repository", lambda *_args: report)
+
+    async def selected_only(*_: object, **__: object) -> tuple[CaseResult, ...]:
+        return (selected,)
+
+    monkeypatch.setattr(evaluate, "evaluate_repository", selected_only)
+    result = evaluate.run(repo=str(tmp_path), environment={})
+
+    assert result.outcome is Outcome.PASS
+    assert any(item.code == "SCW1001" for item in result.diagnostics)
+    warnings = result.data["warnings"]
+    assert isinstance(warnings, tuple)
+    assert warnings[0]["path"] == "SKILL.md"
 
 
 def test_eval_finds_nearest_config_and_scopes_bare_runs_to_cwd(

@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from skillroll.artifacts.hashes import InputHash
+from skillroll.world.bundle import BundleWarning
 from skillroll.world.session import WorldEvent
 
 ARTIFACT_FORMAT_VERSION = 2
@@ -72,6 +73,16 @@ class RunFacts:
     profile_name: str | None = None
     profile_purpose: str | None = None
     skill_available: bool = True
+    warnings: tuple[BundleWarning, ...] = ()
+
+
+def _warning_data(warning: BundleWarning) -> dict[str, object]:
+    """Render one non-secret bundle advisory for machine-readable evidence."""
+    return {
+        "path": warning.path.as_posix(),
+        "bytes": warning.size,
+        "summary": warning.summary,
+    }
 
 
 def run_bytes(facts: RunFacts) -> bytes:
@@ -109,6 +120,8 @@ def run_bytes(facts: RunFacts) -> bytes:
         values["failure"] = facts.failure
     if facts.failure_details:
         values["failure_details"] = list(facts.failure_details)
+    if facts.warnings:
+        values["warnings"] = [_warning_data(item) for item in facts.warnings]
     return canonical_json(values)
 
 
@@ -127,9 +140,12 @@ def report_bytes(facts: RunFacts) -> bytes:
             f"{name}={value}" for name, value in facts.effective_limits.items()
         ),
         "",
-        "## Actions",
-        "",
     ]
+    if facts.warnings:
+        lines.extend(("## Warnings", ""))
+        lines.extend(f"- {item.summary}" for item in facts.warnings)
+        lines.append("")
+    lines.extend(("## Actions", ""))
     if not facts.events:
         lines.append("No action completed.")
     for event in facts.events:
@@ -202,6 +218,7 @@ def final_report_bytes(
     model_profile: str | None = None,
     model_profile_purpose: str | None = None,
     skill_available: bool = True,
+    warnings: tuple[BundleWarning, ...] = (),
 ) -> bytes:
     """Render a final report in terms a new maintainer can act on."""
     if finished is None:
@@ -230,6 +247,9 @@ def final_report_bytes(
                 lines.insert(6, f"- Profile purpose: {model_profile_purpose}")
     if execution_turns is not None:
         lines.append(f"- Skill turns: {execution_turns}")
+    if warnings:
+        lines.extend(("", "## Warnings", ""))
+        lines.extend(f"- {item.summary}" for item in warnings)
     lines.extend(("", "## Actions", ""))
     if not events:
         lines.append("No action completed.")
@@ -424,11 +444,31 @@ def experiment_report_bytes(summary: Mapping[str, object]) -> bytes:
         "",
         str(interpretation.get("next_action", "Inspect the paired evidence.")),
         "",
-        "## Paired runs",
-        "",
-        "| Sample | With skill | Without skill | Interpretation | Evidence |",
-        "| ---: | --- | --- | --- | --- |",
     ]
+    warnings = summary.get("warnings", ())
+    if isinstance(warnings, (list, tuple)) and warnings:
+        lines.extend(("## Warnings", ""))
+        for warning in warnings:
+            if not isinstance(warning, Mapping):
+                continue
+            warning_skill = warning.get("skill", "unknown skill")
+            warning_case = warning.get("case")
+            context = f"Skill `{warning_skill}`"
+            if warning_case:
+                context += f" (case `{warning_case}`)"
+            lines.append(
+                f"- {context}: "
+                f"{warning.get('summary', 'A large skill file was indexed.')}"
+            )
+        lines.append("")
+    lines.extend(
+        (
+            "## Paired runs",
+            "",
+            "| Sample | With skill | Without skill | Interpretation | Evidence |",
+            "| ---: | --- | --- | --- | --- |",
+        )
+    )
     pairs = summary.get("paired_comparisons", ())
     if isinstance(pairs, (list, tuple)):
         for pair in pairs:

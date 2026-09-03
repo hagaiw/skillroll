@@ -304,6 +304,11 @@ skillroll bounds turns, time, and model output, and records inference usage in
 every report. Use deterministic rules for exact action results. Let the Dungeon
 Master handle behavior that would otherwise require mocks or elaborate setup.
 
+SkillRoll accepts large skill folders and indexes their files in bounded
+chunks. It warns when `SKILL.md` reaches 128 KiB, because large instructions
+can increase model context and cost, but it keeps evaluating. Simulated `Read`
+still returns at most 64 KiB of a UTF-8 file.
+
 ## Trust and security
 
 skillroll is local, open source infrastructure:

@@ -426,7 +426,9 @@ def test_execution_stops_unsafe_skill_and_large_input_before_runtime(
     assert runtime.calls == []
 
 
-def test_skill_loader_rejects_symlink_and_large_files(tmp_path: Path) -> None:
+def test_skill_loader_rejects_symlink_and_accepts_large_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     external = tmp_path / "outside.md"
     external.write_text("outside", encoding="utf-8")
     linked = skill_at(tmp_path / "linked")
@@ -434,7 +436,13 @@ def test_skill_loader_rejects_symlink_and_large_files(tmp_path: Path) -> None:
     linked.skill_file.symlink_to(external)
     large = skill_at(tmp_path / "large", b"x" * (128 * 1024 + 1))
     assert load_skill_text(linked)[0] is None
-    assert load_skill_text(large)[0] is None
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda _: (_ for _ in ()).throw(AssertionError("use text-mode reads")),
+    )
+    loaded, failure = load_skill_text(large)
+    assert failure is None and loaded == "x" * (128 * 1024 + 1)
 
 
 def test_execution_normalizes_and_redacts_runtime_errors(tmp_path: Path) -> None:

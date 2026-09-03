@@ -15,9 +15,9 @@ from skillroll.paths import parse_relative_path
 from skillroll.repository_io import sorted_entries
 
 MAX_FILES = 512
-MAX_TOTAL_BYTES = 4 * 1024 * 1024
-MAX_BINARY_BYTES = 64 * 1024 * 1024
+SKILL_WARNING_BYTES = 128 * 1024
 MAX_READABLE_BYTES = 64 * 1024
+_HASH_CHUNK_BYTES = 1024 * 1024
 
 # These paths are harness metadata or generated/dependency output, not packaged
 # skill resources. This policy is intentionally independent of repository
@@ -46,7 +46,7 @@ EXCLUDED_FILE_SUFFIXES = frozenset({".pyc", ".pyo"})
 
 
 class BundleError(Exception):
-    """A selected skill bundle is unsafe or too large to evaluate."""
+    """A selected skill bundle is unsafe or too large in file count to evaluate."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,11 +59,29 @@ class BundleFile:
 
 
 @dataclass(frozen=True, slots=True)
+class BundleWarning:
+    """An advisory about a bundle file that does not change its outcome."""
+
+    path: PurePosixPath
+    size: int
+
+    @property
+    def summary(self) -> str:
+        """Return a short, user-facing explanation of this advisory."""
+        return (
+            f"{self.path.as_posix()} is {self.size} bytes, at or above the "
+            f"{SKILL_WARNING_BYTES // 1024} KiB advisory threshold. Evaluation "
+            "continues, but large instructions may increase model context and cost."
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class BundleIndex:
     """An immutable manifest of files the world may serve to the skill."""
 
     root: Path
     files: tuple[BundleFile, ...]
+    warnings: tuple[BundleWarning, ...] = ()
 
     def file(self, path: PurePosixPath) -> BundleFile | None:
         """Find one pre-indexed file without reading the filesystem."""
@@ -107,8 +125,28 @@ def _walk(root: Path, directory: Path) -> tuple[Path, ...]:
     return tuple(files)
 
 
+def _stream_file(path: Path) -> tuple[int, str]:
+    """Hash one regular file without loading it all into memory."""
+    descriptor = -1
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise OSError("bundled path is not a regular file")
+        digest = hashlib.sha256()
+        size = 0
+        with os.fdopen(descriptor, "rb") as opened:
+            descriptor = -1
+            while chunk := opened.read(_HASH_CHUNK_BYTES):
+                size += len(chunk)
+                digest.update(chunk)
+        return size, digest.hexdigest()
+    finally:
+        if descriptor != -1:
+            os.close(descriptor)
+
+
 def build_bundle(root: Path) -> BundleIndex:
-    """Index bounded, non-symlink skill files in canonical POSIX order."""
+    """Index non-symlink skill files in canonical POSIX order."""
     try:
         resolved = root.resolve(strict=True)
     except OSError as error:
@@ -116,45 +154,26 @@ def build_bundle(root: Path) -> BundleIndex:
     if root.is_symlink() or not resolved.is_dir():
         raise BundleError("The selected skill folder must be an ordinary directory.")
     entries: list[BundleFile] = []
-    text_total = 0
-    binary_total = 0
+    warnings: list[BundleWarning] = []
     for path in sorted(
         _walk(resolved, resolved),
         key=lambda item: item.relative_to(resolved).as_posix(),
     ):
         relative = PurePosixPath(path.relative_to(resolved).as_posix())
         try:
-            raw = path.read_bytes()
+            size, digest = _stream_file(path)
         except OSError as error:
             raise BundleError(
                 f"SkillRoll could not read bundled file {relative}."
             ) from error
-        if b"\x00" in raw:
-            binary_total += len(raw)
-        else:
-            try:
-                raw.decode("utf-8")
-            except UnicodeDecodeError:
-                binary_total += len(raw)
-            else:
-                text_total += len(raw)
-        entries.append(BundleFile(relative, len(raw), hashlib.sha256(raw).hexdigest()))
+        entries.append(BundleFile(relative, size, digest))
         if len(entries) > MAX_FILES:
             raise BundleError(
                 f"This skill contains {len(entries)} files; the limit is {MAX_FILES}."
             )
-        if text_total > MAX_TOTAL_BYTES:
-            raise BundleError(
-                f"This skill contains {text_total} readable text bytes; the bundle "
-                "limit is "
-                f"{MAX_TOTAL_BYTES} bytes."
-            )
-        if binary_total > MAX_BINARY_BYTES:
-            raise BundleError(
-                f"This skill contains {binary_total} binary asset bytes; the bundle "
-                f"limit is {MAX_BINARY_BYTES} bytes."
-            )
-    return BundleIndex(resolved, tuple(entries))
+        if relative == PurePosixPath("SKILL.md") and size >= SKILL_WARNING_BYTES:
+            warnings.append(BundleWarning(relative, size))
+    return BundleIndex(resolved, tuple(entries), tuple(warnings))
 
 
 def bundle_read(

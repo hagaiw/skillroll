@@ -36,7 +36,11 @@ content.
   passed to repository checks, artifacts, CLI arguments, or diagnostics.
 - Skill file reads stay inside the selected skill root and reject symlink
   escapes. The skill bundle excludes eval files, hidden paths, bytecode, and
-  common generated or dependency directories.
+  common generated or dependency directories. Bundle indexing hashes files in
+  bounded chunks rather than loading large support or media files into memory.
+  A `SKILL.md` at or above 128 KiB produces an advisory warning and does not
+  change the evaluation result; simulated `Read` remains limited to 64 KiB,
+  and a bundle still contains at most 512 regular files.
 - Repository checks are ordinary host commands. They run only with
   `--run-commands` or the corresponding reviewed workflow option. The
   generated pull-request workflow does not run them automatically.

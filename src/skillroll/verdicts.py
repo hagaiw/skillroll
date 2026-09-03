@@ -13,6 +13,7 @@ from skillroll.judge import JudgeResult
 from skillroll.models import EvalCase
 from skillroll.outcomes import Outcome
 from skillroll.runtime.execution import ExecutionResult
+from skillroll.world.bundle import BundleWarning
 from skillroll.world.session import WorldEvent
 
 type CaseOutcome = Literal["PASS", "FAIL", "INCOMPLETE", "ERROR"]
@@ -32,6 +33,7 @@ class CaseResult:
     artifact_directory: PurePosixPath | None
     events: tuple[WorldEvent, ...] = ()
     skill_available: bool = True
+    warnings: tuple[BundleWarning, ...] = ()
 
 
 def case_outcome(

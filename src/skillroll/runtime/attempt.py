@@ -29,7 +29,7 @@ from skillroll.runtime.execution import (
     ExecutionRequest,
     SkillExecutor,
 )
-from skillroll.world.bundle import BundleError, BundleIndex, build_bundle
+from skillroll.world.bundle import BundleError, BundleIndex, BundleWarning, build_bundle
 from skillroll.world.session import WorldEvent, WorldSession
 
 
@@ -41,6 +41,7 @@ class PreliminaryAttempt:
     failure: InferenceFailure | None
     artifact_directory: PurePosixPath | None
     events: tuple[WorldEvent, ...] = ()
+    warnings: tuple[BundleWarning, ...] = ()
 
 
 def input_hashes(
@@ -99,6 +100,7 @@ async def execute_preliminary(
             if skill_available
             else BundleIndex(case.skill.root, ())
         )
+        warnings = bundle.warnings
         inputs = input_hashes(config, case, bundle)
         manifest = manifest_bytes(inputs)
         run_id, directory, started = store.create()
@@ -107,6 +109,7 @@ async def execute_preliminary(
             None,
             InferenceFailure(InferenceFailureKind.EXECUTION_ERROR, str(error)),
             None,
+            (),
         )
     session = WorldSession(
         profile, limits, case.world_markdown, bundle, case.rules, transport
@@ -157,6 +160,7 @@ async def execute_preliminary(
         profile.profile_name,
         profile.profile_purpose,
         skill_available,
+        warnings,
     )
     try:
         store.write(directory, facts, manifest, session.events)
@@ -166,10 +170,12 @@ async def execute_preliminary(
             InferenceFailure(InferenceFailureKind.EXECUTION_ERROR, str(error)),
             PurePosixPath(".skillroll") / "runs" / run_id,
             session.events,
+            warnings,
         )
     return PreliminaryAttempt(
         execution,
         failure,
         PurePosixPath(".skillroll") / "runs" / run_id,
         session.events,
+        warnings,
     )

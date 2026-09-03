@@ -19,7 +19,6 @@ from skillroll.models import InferenceLimits, Skill
 from skillroll.prompt_resources import load_harness_prompt
 
 _MAX_INPUT_BYTES = 64 * 1024
-_MAX_SKILL_BYTES = 128 * 1024
 
 
 class WorldActionHandler(Protocol):
@@ -91,7 +90,7 @@ class SdkRuntime(Protocol):
 
 
 def load_skill_text(skill: Skill) -> tuple[str | None, InferenceFailure | None]:
-    """Read only a regular, in-root UTF-8 SKILL.md below the size ceiling."""
+    """Read only a regular, in-root UTF-8 SKILL.md file."""
     try:
         root = skill.root.resolve(strict=True)
         path = skill.skill_file
@@ -99,10 +98,8 @@ def load_skill_text(skill: Skill) -> tuple[str | None, InferenceFailure | None]:
             raise ValueError("SKILL.md is not a regular file.")
         resolved = path.resolve(strict=True)
         resolved.relative_to(root)
-        raw = resolved.read_bytes()
-        if len(raw) > _MAX_SKILL_BYTES:
-            raise ValueError("SKILL.md is larger than 128 KiB.")
-        return raw.decode("utf-8"), None
+        with resolved.open("r", encoding="utf-8", newline="") as opened:
+            return opened.read(), None
     except (OSError, UnicodeDecodeError, ValueError) as error:
         return None, InferenceFailure(
             InferenceFailureKind.EXECUTION_ERROR,
