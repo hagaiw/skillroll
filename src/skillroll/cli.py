@@ -214,10 +214,19 @@ def _parser() -> SkillRollParser:
             "you trust."
         ),
     )
-    evaluate_parser.add_argument(
+    model_selection = evaluate_parser.add_mutually_exclusive_group()
+    model_selection.add_argument(
         "--model-profile",
         metavar="NAME",
         help="Model profile to use.",
+    )
+    model_selection.add_argument(
+        "--model",
+        metavar="MODEL",
+        help=(
+            "Override the configured model for this eval invocation; cannot be "
+            "combined with --model-profile."
+        ),
     )
     evaluate_parser.add_argument(
         "--samples",
@@ -373,6 +382,7 @@ def main(
                         all_cases=namespace.all,
                         run_commands=namespace.run_commands,
                         model_profile=namespace.model_profile,
+                        model_override=namespace.model,
                         samples=namespace.samples,
                         with_skill_control=namespace.with_skill_control,
                     )

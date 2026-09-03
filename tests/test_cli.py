@@ -148,6 +148,59 @@ def test_help_and_version_succeed(argument: str) -> None:
     assert process.stderr == ""
 
 
+def test_eval_forwards_one_off_model_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from skillroll.commands import evaluate
+
+    called: dict[str, object] = {}
+
+    def fake_run(**kwargs: object) -> CommandResult:
+        called.update(kwargs)
+        return CommandResult(Outcome.PASS, "ok")
+
+    monkeypatch.setattr(evaluate, "run", fake_run)
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    assert (
+        main(
+            [
+                "eval",
+                "--repo",
+                str(tmp_path),
+                "--model",
+                "provider/override",
+            ],
+            stdout=stdout,
+            stderr=stderr,
+        )
+        == 0
+    )
+    assert called["model_override"] == "provider/override"
+    assert called["model_profile"] is None
+
+
+def test_eval_rejects_model_and_profile_together() -> None:
+    stderr = io.StringIO()
+
+    assert (
+        main(
+            [
+                "eval",
+                "--model",
+                "provider/override",
+                "--model-profile",
+                "baseline",
+            ],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 3
+    )
+    assert "could not understand" in stderr.getvalue()
+    assert "not allowed with argument" in stderr.getvalue()
+
+
 def test_default_streams_argv_entrypoint_and_module(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

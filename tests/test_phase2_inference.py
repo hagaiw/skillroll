@@ -657,6 +657,48 @@ def test_ranked_profile_candidates_preserve_one_profile_for_all_stages() -> None
     }
 
 
+def test_model_override_replaces_candidates_but_preserves_selected_profile() -> None:
+    settings = InferenceSettings(
+        "https://example.test/v1",
+        "unused",
+        "KEY",
+        InferenceLimits(3, 45, 512),
+        {
+            "baseline": ModelProfile(
+                "Low-cost release signal.",
+                ("provider/first", "provider/fallback"),
+            )
+        },
+        "baseline",
+    )
+
+    candidates, failure = resolve_inference_candidates(
+        settings, {"KEY": "secret"}, model_override="provider/override"
+    )
+
+    assert failure is None
+    assert candidates is not None
+    assert len(candidates) == 1
+    selected = candidates[0]
+    assert selected.model == "provider/override"
+    assert selected.base_url == settings.base_url
+    assert selected.api_key.reveal() == "secret"
+    assert selected.limits == settings.limits
+    assert selected.profile_name == "baseline"
+    assert selected.profile_purpose == "Low-cost release signal."
+
+
+def test_model_override_rejects_blank_or_unsafe_names() -> None:
+    settings = InferenceSettings("https://example.test/v1", "configured", "KEY")
+    for override in (" ", "provider/one\nprovider/two", "x" * 201):
+        candidates, failure = resolve_inference_candidates(
+            settings, {"KEY": "secret"}, model_override=override
+        )
+        assert candidates is None
+        assert failure is not None
+        assert failure.kind is InferenceFailureKind.INVALID_CONFIGURATION
+
+
 def test_transport_helpers_and_failures_are_deterministic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

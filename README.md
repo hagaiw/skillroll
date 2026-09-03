@@ -187,6 +187,11 @@ skillroll eval --case adventurer/evals/inspect-before-risky-action.eval.md
 The command prints its verdict and saves the report under the repository's
 `.skillroll/runs/` directory.
 
+To try another model once without changing the configuration, add
+`--model provider/model-name` to the `eval` command. This keeps the configured
+endpoint, key environment variable, limits, and profile metadata for the run;
+it cannot be combined with `--model-profile`.
+
 ## Inference
 
 Running an eval requires an API key for a compatible inference endpoint.

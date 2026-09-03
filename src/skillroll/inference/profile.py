@@ -134,8 +134,23 @@ class ResolvedInference:
 
 
 def _candidate_models(
-    settings: InferenceSettings, profile_name: str | None
+    settings: InferenceSettings,
+    profile_name: str | None,
+    model_override: str | None = None,
 ) -> tuple[tuple[str, str | None, str | None], ...] | InferenceFailure:
+    if model_override is not None:
+        model_override = model_override.strip()
+        if (
+            not model_override
+            or "\n" in model_override
+            or "\r" in model_override
+            or len(model_override.encode("utf-8")) > 200
+        ):
+            return InferenceFailure(
+                InferenceFailureKind.INVALID_CONFIGURATION,
+                "The --model override must be a non-empty model name on one line.",
+                ("Pass a model name no longer than 200 bytes.",),
+            )
     if not settings.profiles:
         if profile_name is not None:
             return InferenceFailure(
@@ -146,7 +161,13 @@ def _candidate_models(
                     "--model-profile.",
                 ),
             )
-        return ((settings.model, None, None),)
+        return (
+            (
+                (settings.model if model_override is None else model_override),
+                None,
+                None,
+            ),
+        )
     selected = profile_name or settings.default_profile
     if selected is None:
         if len(settings.profiles) == 1:
@@ -166,6 +187,8 @@ def _candidate_models(
             f"The model profile '{selected}' is not configured.",
             (f"Choose one of the configured profiles: {names}.",),
         )
+    if model_override is not None:
+        return ((model_override, selected, profile.purpose),)
     return tuple((model, selected, profile.purpose) for model in profile.models)
 
 
@@ -173,6 +196,7 @@ def resolve_inference_candidates(
     settings: InferenceSettings | None,
     environment: Mapping[str, str] | None = None,
     profile_name: str | None = None,
+    model_override: str | None = None,
 ) -> tuple[tuple[ResolvedInference, ...] | None, InferenceFailure | None]:
     """Resolve ranked candidates; callers may use them only for preflight."""
     if settings is None:
@@ -197,7 +221,7 @@ def resolve_inference_candidates(
                 "doctor again.",
             ),
         )
-    candidates = _candidate_models(settings, profile_name)
+    candidates = _candidate_models(settings, profile_name, model_override)
     if isinstance(candidates, InferenceFailure):
         return None, candidates
     secret = SecretValue(value)
@@ -221,10 +245,11 @@ def resolve_inference(
     settings: InferenceSettings | None,
     environment: Mapping[str, str] | None = None,
     profile_name: str | None = None,
+    model_override: str | None = None,
 ) -> tuple[ResolvedInference | None, InferenceFailure | None]:
     """Resolve the named key once, returning only redacted failure data."""
     candidates, failure = resolve_inference_candidates(
-        settings, environment, profile_name
+        settings, environment, profile_name, model_override
     )
     if failure is not None:
         return None, failure

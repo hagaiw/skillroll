@@ -530,10 +530,17 @@ async def _resolve_profile(
     environment: Mapping[str, str],
     transport_factory: TransportFactory,
     model_profile: str | None,
+    model_override: str | None = None,
 ) -> tuple[ResolvedInference, ChatTransport] | InferenceFailure:
     """Run compatibility preflight once and retain the selected transport."""
+    if model_profile is not None and model_override is not None:
+        return InferenceFailure(
+            InferenceFailureKind.INVALID_CONFIGURATION,
+            "--model cannot be combined with --model-profile.",
+            ("Choose one model selection option for this eval.",),
+        )
     candidates, failure = resolve_inference_candidates(
-        config.inference, environment, model_profile
+        config.inference, environment, model_profile, model_override
     )
     if failure is not None:
         return failure
@@ -577,13 +584,14 @@ async def evaluate_repository(
     check_runner: CheckRunner | None = None,
     store_factory: StoreFactory = _store,
     model_profile: str | None = None,
+    model_override: str | None = None,
     skill_available: bool = True,
     _resolved: tuple[ResolvedInference, ChatTransport] | None = None,
     _close_transport: bool = True,
 ) -> tuple[CaseResult, ...] | InferenceFailure:
     """Evaluate every selected case once, in stable order, after one preflight."""
     resolved = _resolved or await _resolve_profile(
-        config, environment, transport_factory, model_profile
+        config, environment, transport_factory, model_profile, model_override
     )
     if isinstance(resolved, InferenceFailure):
         return resolved
@@ -989,10 +997,11 @@ async def evaluate_experiment(
     check_runner: CheckRunner | None = None,
     store_factory: StoreFactory = _store,
     model_profile: str | None = None,
+    model_override: str | None = None,
 ) -> ExperimentResult | InferenceFailure:
     """Collect independent samples and optional paired skill-omission controls."""
     resolved = await _resolve_profile(
-        config, environment, transport_factory, model_profile
+        config, environment, transport_factory, model_profile, model_override
     )
     if isinstance(resolved, InferenceFailure):
         return resolved
@@ -1012,6 +1021,7 @@ async def evaluate_experiment(
                 check_runner=check_runner,
                 store_factory=store_factory,
                 model_profile=model_profile,
+                model_override=model_override,
                 skill_available=True,
                 _resolved=(profile, transport),
                 _close_transport=False,
@@ -1030,6 +1040,7 @@ async def evaluate_experiment(
                     check_runner=check_runner,
                     store_factory=store_factory,
                     model_profile=model_profile,
+                    model_override=model_override,
                     skill_available=False,
                     _resolved=(profile, transport),
                     _close_transport=False,
@@ -1154,10 +1165,25 @@ def run(
     store_factory: StoreFactory = _store,
     selected_cases: tuple[EvalCase, ...] | None = None,
     model_profile: str | None = None,
+    model_override: str | None = None,
     samples: int = 1,
     with_skill_control: bool = False,
 ) -> CommandResult:
     """Resolve the local scope, validate, then run the complete pipeline."""
+    if model_profile is not None and model_override is not None:
+        return CommandResult(
+            Outcome.ERROR,
+            "SkillRoll could not start the evaluation.",
+            (
+                Diagnostic(
+                    "SCE2002",
+                    "--model cannot be combined with --model-profile.",
+                    next_action=(
+                        "Choose one model selection option, then run the eval again."
+                    ),
+                ),
+            ),
+        )
     if samples < 1 or samples > 10:
         return CommandResult(
             Outcome.ERROR,
@@ -1209,6 +1235,7 @@ def run(
                 check_runner=check_runner,
                 store_factory=store_factory,
                 model_profile=model_profile,
+                model_override=model_override,
             )
             if research_mode
             else evaluate_repository(
@@ -1221,6 +1248,7 @@ def run(
                 check_runner=check_runner,
                 store_factory=store_factory,
                 model_profile=model_profile,
+                model_override=model_override,
             )
         )
     except KeyboardInterrupt:

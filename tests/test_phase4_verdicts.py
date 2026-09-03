@@ -1976,6 +1976,132 @@ def test_evaluate_uses_ranked_fallback_only_during_preflight(tmp_path: Path) -> 
     assert '"model_profile":"baseline"' in summary
 
 
+def test_model_override_uses_one_model_for_all_stages_and_artifacts(
+    tmp_path: Path,
+) -> None:
+    case = case_at(tmp_path)
+    settings = InferenceSettings(
+        "https://example.test/v1",
+        "unused",
+        "KEY",
+        InferenceLimits(2, 10, 256),
+        {
+            "baseline": ModelProfile(
+                "Low-cost release signal.",
+                ("provider/first", "provider/fallback"),
+            )
+        },
+        "baseline",
+    )
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        settings,
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+    before = config.config_path.read_bytes()
+    transport = ScriptedTransport(preflight_responses())
+    seen_profiles: list[ResolvedInference] = []
+
+    def factory(resolved: ResolvedInference) -> ScriptedTransport:
+        seen_profiles.append(resolved)
+        return transport
+
+    result = asyncio.run(
+        evaluate.evaluate_repository(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            transport_factory=factory,
+            executor_factory=lambda resolved: Executor(),
+            model_override="provider/override",
+        )
+    )
+
+    assert not isinstance(result, InferenceFailure)
+    assert result[0].outcome == "PASS"
+    assert len(seen_profiles) == 1
+    assert seen_profiles[0].model == "provider/override"
+    assert seen_profiles[0].profile_name == "baseline"
+    assert [request.model for request in transport.requests] == [
+        "provider/override",
+    ] * 4
+    assert config.config_path.read_bytes() == before
+    directory = tmp_path / result[0].artifact_directory
+    run_text = (directory / "run.json").read_text(encoding="utf-8")
+    result_text = (directory / "result.json").read_text(encoding="utf-8")
+    report_text = (directory / "report.md").read_text(encoding="utf-8")
+    assert '"model":"provider/override"' in run_text
+    assert '"requested_model":"provider/override"' in result_text
+    assert "- Model: `provider/override`" in report_text
+
+
+def test_model_override_is_shared_by_samples_and_skill_controls(
+    tmp_path: Path,
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings("https://example.test/v1", "configured", "KEY"),
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+    passing = (
+        '{"verdict":"PASS","rationale":"supported",'
+        '"criteria":[{"criterion":"success","status":"met",'
+        '"evidence":"The response supports the criterion."}],'
+        '"unmet_criteria":[]}'
+    )
+    failing = (
+        '{"verdict":"FAIL","rationale":"unsupported",'
+        '"criteria":[{"criterion":"success","status":"not_met",'
+        '"evidence":"The response does not support the criterion."}],'
+        '"unmet_criteria":["success"]}'
+    )
+    responses = preflight_responses()[:2]
+    for _ in range(2):
+        responses.extend(
+            (
+                ChatResponse("world", (), "override", None),
+                ChatResponse(passing, (), "override", None),
+                ChatResponse("world", (), "override", None),
+                ChatResponse(failing, (), "override", None),
+            )
+        )
+    transport = ScriptedTransport(responses)
+
+    result = asyncio.run(
+        evaluate.evaluate_experiment(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            samples=2,
+            with_skill_control=True,
+            transport_factory=lambda _: transport,
+            executor_factory=lambda _: Executor(),
+            model_override="provider/override",
+        )
+    )
+
+    assert isinstance(result, evaluate.ExperimentResult)
+    assert result.summary["model"] == "provider/override"
+    assert [request.model for request in transport.requests] == [
+        "provider/override",
+    ] * 10
+    experiment_text = (tmp_path / result.artifact_directory / "result.json").read_text(
+        encoding="utf-8"
+    )
+    assert '"model":"provider/override"' in experiment_text
+
+
 @pytest.mark.parametrize("failing_append", [1, 2])
 def test_evaluate_repository_turns_evidence_append_errors_into_case_errors(
     tmp_path: Path, failing_append: int

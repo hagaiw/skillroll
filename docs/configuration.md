@@ -67,6 +67,18 @@ SkillRoll selects the first compatible model before the case starts. It then
 uses that model for the whole case and never switches midway. Use
 `--model-profile NAME` when no default is configured.
 
+To try a different model for one eval without editing `skillroll.toml`, pass
+`--model MODEL`:
+
+```shell
+skillroll eval --case reviewer/evals/boundary.eval.md --model provider/model-name
+```
+
+This keeps the configured endpoint, API-key environment variable, limits, and
+selected profile metadata for that invocation. It does not change the config
+file or fall back to another model. Choose either `--model` or
+`--model-profile`, not both.
+
 ## Optional cost estimates
 
 Add rates that you maintain yourself:
