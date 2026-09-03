@@ -9,6 +9,8 @@ from skillroll import prompt_resources
 from skillroll.prompt_resources import load_harness_prompt
 from skillroll.runtime.execution import (
     omitted_skill_instructions,
+    text_only_omitted_skill_instructions,
+    text_only_wrapped_instructions,
     wrapped_instructions,
 )
 from skillroll.world import model as world_model
@@ -17,6 +19,12 @@ _PLUGIN_PROMPTS = {
     "executor": "plugins/harness-prompts/skills/executor-prompt/references/system.md",
     "executor_omission": (
         "plugins/harness-prompts/skills/executor-prompt/references/omission.md"
+    ),
+    "executor_text_only": (
+        "plugins/harness-prompts/skills/executor-prompt/references/text-only.md"
+    ),
+    "executor_text_only_omission": (
+        "plugins/harness-prompts/skills/executor-prompt/references/text-only-omission.md"
     ),
     "world": (
         "plugins/harness-prompts/skills/world-simulator-prompt/references/system.md"
@@ -41,6 +49,11 @@ def test_executor_contract_keeps_dynamic_skill_text_at_the_call_site() -> None:
     instructions = wrapped_instructions("A selected skill body.")
     assert instructions == load_harness_prompt("executor") + "\nA selected skill body."
     assert omitted_skill_instructions() == load_harness_prompt("executor_omission")
+    assert text_only_omitted_skill_instructions() == load_harness_prompt(
+        "executor_text_only_omission"
+    )
+    assert text_only_wrapped_instructions("raw").endswith("raw")
+    assert "no tools" in load_harness_prompt("executor_text_only")
     assert "Success criteria" not in load_harness_prompt("executor")
     assert "evals/" not in load_harness_prompt("executor")
 

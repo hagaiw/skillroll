@@ -7,11 +7,24 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Literal
 
-PromptName = Literal["executor", "executor_omission", "world", "judge"]
+PromptName = Literal[
+    "executor",
+    "executor_omission",
+    "executor_text_only",
+    "executor_text_only_omission",
+    "world",
+    "judge",
+]
 
 _PROMPT_PATHS: dict[PromptName, tuple[str, ...]] = {
     "executor": ("executor-prompt", "references", "system.md"),
     "executor_omission": ("executor-prompt", "references", "omission.md"),
+    "executor_text_only": ("executor-prompt", "references", "text-only.md"),
+    "executor_text_only_omission": (
+        "executor-prompt",
+        "references",
+        "text-only-omission.md",
+    ),
     "world": ("world-simulator-prompt", "references", "system.md"),
     "judge": ("semantic-judge-prompt", "references", "system.md"),
 }

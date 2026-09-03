@@ -18,6 +18,7 @@ from skillroll.artifacts.hashes import classify_bundle_path, hash_bytes, hash_fi
 from skillroll.artifacts.records import (
     RunFacts,
     canonical_json,
+    execution_bytes,
     manifest_bytes,
     report_bytes,
     run_bytes,
@@ -165,6 +166,67 @@ def parsed_case(tmp_path: Path, metadata: str = "schema_version: 1") -> EvalCase
     value = parse_eval_case(path, skill).value
     assert value is not None
     return value
+
+
+def parse_topology_case(
+    tmp_path: Path, world: str | None, metadata: str = "schema_version: 1"
+) -> EvalCase | None:
+    skill = skill_at(tmp_path / "skills" / "review")
+    path = skill.evals_directory / "topology.eval.md"
+    world_section = "" if world is None else f"## World\n\n{world}\n\n"
+    path.write_text(
+        f"# Review incident draft\n\n```skillroll\n{metadata}\n```\n\n"
+        "## Input\n\nReview the incident draft and explain the next step.\n\n"
+        f"{world_section}## Success criteria\n\n"
+        "- Explain the next step using only the request and skill guidance.\n",
+        encoding="utf-8",
+    )
+    return parse_eval_case(path, skill).value
+
+
+@pytest.mark.parametrize("world", (None, "", "   \n\t"))
+def test_missing_or_empty_world_infers_text_only_topology(
+    tmp_path: Path, world: str | None
+) -> None:
+    case = parse_topology_case(tmp_path, world)
+    assert case is not None
+    assert case.world_markdown == ""
+    assert case.execution_topology == "text_only"
+
+
+def test_nonempty_world_keeps_action_enabled_topology(tmp_path: Path) -> None:
+    case = parse_topology_case(tmp_path, "The incident tracker is available.")
+    assert case is not None
+    assert case.world_markdown == "The incident tracker is available."
+    assert case.execution_topology == "action_enabled"
+
+
+@pytest.mark.parametrize("world", (None, "", "  "))
+def test_nonempty_rules_are_invalid_without_world(
+    tmp_path: Path, world: str | None
+) -> None:
+    case = parse_topology_case(
+        tmp_path,
+        world,
+        "schema_version: 1\nrules:\n  - name: status\n    tool_name: Lookup\n"
+        "    arguments: {}\n    result: ready",
+    )
+    assert case is None
+    skill = skill_at(tmp_path / "skills" / "review")
+    path = skill.evals_directory / "topology.eval.md"
+    diagnostics = parse_eval_case(path, skill).diagnostics
+    assert any(
+        "cannot use non-empty deterministic `rules`" in item.summary
+        for item in diagnostics
+    )
+
+
+@pytest.mark.parametrize(
+    "metadata", ("schema_version: 1\nrules: []", "schema_version: 1\nrules: null")
+)
+def test_empty_rules_are_allowed_without_world(tmp_path: Path, metadata: str) -> None:
+    case = parse_topology_case(tmp_path, None, metadata)
+    assert case is not None and case.execution_topology == "text_only"
 
 
 def event(source: str = "world_model") -> WorldEvent:
@@ -540,6 +602,32 @@ def test_hash_and_record_error_or_optional_branches(tmp_path: Path) -> None:
         "id", "time", "skill", "case", None, "url", "model", {}, {}, "x", "executed", ()
     )
     assert b"No action completed" in report_bytes(empty)
+
+
+def test_text_only_artifact_renderers_record_execution_topology() -> None:
+    manifest = manifest_bytes(())
+    facts = RunFacts(
+        "id",
+        "time",
+        "skill",
+        "case",
+        None,
+        "url",
+        "model",
+        {},
+        {},
+        hashlib.sha256(manifest).hexdigest(),
+        "executed",
+        (),
+        execution_topology="text_only",
+    )
+    run = json.loads(run_bytes(facts))
+    assert run["execution_topology"] == "text_only"
+    assert b"Execution topology: `text_only`" in report_bytes(facts)
+    execution = json.loads(
+        execution_bytes("answer", 1, {}, execution_topology="text_only")
+    )
+    assert execution["execution_topology"] == "text_only"
 
 
 def test_store_redacts_and_rejects_bad_outputs(tmp_path: Path) -> None:
@@ -1037,6 +1125,52 @@ def test_preliminary_rejects_raised_case_limit_before_model(tmp_path: Path) -> N
         )
     )
     assert attempt.failure is not None and not transport.requests
+
+
+def test_text_only_preliminary_skips_world_session_and_records_topology(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "skills").mkdir()
+    (repo / "skillroll.toml").write_text(
+        "schema_version = 1\nskills_path = 'skills'", encoding="utf-8"
+    )
+    config = load_config(repo).value
+    assert config is not None
+    case = parse_topology_case(repo, None)
+    assert case is not None
+
+    def fail_world_session(*_: object) -> object:
+        raise AssertionError("text-only execution must not create WorldSession")
+
+    monkeypatch.setattr("skillroll.runtime.attempt.WorldSession", fail_world_session)
+
+    class TextOnlyExecutor:
+        async def execute(
+            self, request: ExecutionRequest, world_action: object
+        ) -> ExecutionAttempt:
+            assert request.execution_topology == "text_only"
+            assert world_action is None
+            return ExecutionAttempt(ExecutionResult("text answer", 1, (), ()), None)
+
+    transport = FakeTransport([])
+    result = asyncio.run(
+        execute_preliminary(
+            config,
+            case,
+            profile(),
+            TextOnlyExecutor(),
+            transport,
+            ArtifactStore(repo, SecretRedactor(profile().api_key)),
+        )
+    )
+    assert result.failure is None and result.events == ()
+    assert result.artifact_directory is not None
+    run = json.loads((repo / result.artifact_directory / "run.json").read_text())
+    assert run["execution_topology"] == "text_only"
+    assert run["transcript"]["actions"] == 0
+    assert not transport.requests
 
 
 def test_preliminary_records_executor_failure_and_store_failure(

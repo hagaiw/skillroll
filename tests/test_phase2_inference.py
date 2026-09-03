@@ -337,7 +337,7 @@ models = ["first", "second"]
 class FakeRuntime:
     def __init__(self, result: SdkExecution | Exception) -> None:
         self.result = result
-        self.calls: list[tuple[str, str, InferenceLimits]] = []
+        self.calls: list[tuple[str, str, InferenceLimits, object, object]] = []
 
     async def run(
         self,
@@ -345,9 +345,12 @@ class FakeRuntime:
         user_input: str,
         _: ResolvedInference,
         limits: InferenceLimits,
-        __: object,
+        world_action: object,
+        execution_topology: object,
     ) -> SdkExecution:
-        self.calls.append((instructions, user_input, limits))
+        self.calls.append(
+            (instructions, user_input, limits, world_action, execution_topology)
+        )
         if isinstance(self.result, Exception):
             raise self.result
         return self.result
@@ -401,6 +404,61 @@ def test_execution_can_run_an_omission_control_without_skill_text() -> None:
         attempt.result is not None and attempt.result.final_output == "control answer"
     )
     assert "intentionally omitted" in runtime.calls[0][0]
+
+
+def test_text_only_execution_has_no_world_handler_and_rejects_rogue_calls(
+    tmp_path: Path,
+) -> None:
+    skill = skill_at(tmp_path / "skill")
+    runtime = FakeRuntime(SdkExecution(" text answer ", 1, (), ()))
+    attempt = asyncio.run(
+        AgentSkillExecutor(profile(), runtime).execute(
+            ExecutionRequest(
+                skill,
+                "Summarize the policy in the request without taking action.",
+                InferenceLimits(),
+                "text_only",
+            ),
+            world_action,
+        )
+    )
+    assert attempt.failure is None
+    assert attempt.result is not None
+    assert runtime.calls[0][3] is None and runtime.calls[0][4] == "text_only"
+    assert "no tools" in runtime.calls[0][0]
+
+    rogue = FakeRuntime(
+        SdkExecution(
+            "should not be accepted",
+            1,
+            (),
+            (ToolCall("rogue-1", "Read", {"path": "secret.txt"}),),
+        )
+    )
+    rogue_attempt = asyncio.run(
+        AgentSkillExecutor(profile(), rogue).execute(
+            ExecutionRequest(
+                skill,
+                "Summarize the policy in the request without taking action.",
+                InferenceLimits(),
+                "text_only",
+            )
+        )
+    )
+    assert rogue_attempt.result is None
+    assert rogue_attempt.failure is not None
+    assert rogue_attempt.failure.kind is InferenceFailureKind.EXECUTION_ERROR
+    assert "text-only" in rogue_attempt.failure.summary
+    assert "Read" in rogue_attempt.failure.details[0]
+
+    invalid = asyncio.run(
+        AgentSkillExecutor(profile(), runtime).execute(
+            ExecutionRequest(skill, "input", InferenceLimits(), "invalid")  # type: ignore[arg-type]
+        )
+    )
+    assert invalid.result is None
+    assert invalid.failure is not None
+    assert "unsupported execution topology" in invalid.failure.summary
 
 
 def test_execution_stops_unsafe_skill_and_large_input_before_runtime(
@@ -996,6 +1054,45 @@ def test_agents_sdk_world_tool_schema_allows_an_arbitrary_json_object(
     schema = tool.params_json_schema
     assert tool.strict_json_schema is False
     assert schema["properties"]["arguments"]["additionalProperties"] is True
+
+    asyncio.run(
+        agents_sdk.AgentsSdkRuntime().run(
+            "instructions",
+            "input",
+            profile(),
+            InferenceLimits(),
+            None,
+            "text_only",
+        )
+    )
+    assert seen["tool"] == []
+
+
+def test_agents_sdk_requires_explicit_action_handler_and_rejects_unknown_topology() -> (
+    None
+):
+    with pytest.raises(ValueError, match="Action-enabled execution requires"):
+        asyncio.run(
+            agents_sdk.AgentsSdkRuntime().run(
+                "instructions",
+                "input",
+                profile(),
+                InferenceLimits(),
+                None,
+                "action_enabled",
+            )
+        )
+    with pytest.raises(ValueError, match="unsupported execution topology"):
+        asyncio.run(
+            agents_sdk.AgentsSdkRuntime().run(
+                "instructions",
+                "input",
+                profile(),
+                InferenceLimits(),
+                None,
+                "invalid",  # type: ignore[arg-type]
+            )
+        )
 
 
 def test_remaining_failure_and_cancellation_boundaries(

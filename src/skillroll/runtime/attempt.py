@@ -108,8 +108,12 @@ async def execute_preliminary(
             InferenceFailure(InferenceFailureKind.EXECUTION_ERROR, str(error)),
             None,
         )
-    session = WorldSession(
-        profile, limits, case.world_markdown, bundle, case.rules, transport
+    session = (
+        WorldSession(
+            profile, limits, case.world_markdown, bundle, case.rules, transport
+        )
+        if case.execution_topology == "action_enabled"
+        else None
     )
     execution: ExecutionAttempt | None
     failure: InferenceFailure | None = None
@@ -120,6 +124,7 @@ async def execute_preliminary(
                 case.skill if skill_available else None,
                 case.input_markdown,
                 limits,
+                case.execution_topology,
             ),
             session,
         )
@@ -149,7 +154,7 @@ async def execute_preliminary(
         _limit_values(limits),
         hashlib.sha256(manifest).hexdigest(),
         status,
-        session.events,
+        () if session is None else session.events,
         None if failure is None else failure.summary,
         ()
         if failure is None
@@ -157,19 +162,25 @@ async def execute_preliminary(
         profile.profile_name,
         profile.profile_purpose,
         skill_available,
+        case.execution_topology,
     )
     try:
-        store.write(directory, facts, manifest, session.events)
+        store.write(
+            directory,
+            facts,
+            manifest,
+            () if session is None else session.events,
+        )
     except ArtifactError as error:
         return PreliminaryAttempt(
             execution,
             InferenceFailure(InferenceFailureKind.EXECUTION_ERROR, str(error)),
             PurePosixPath(".skillroll") / "runs" / run_id,
-            session.events,
+            () if session is None else session.events,
         )
     return PreliminaryAttempt(
         execution,
         failure,
         PurePosixPath(".skillroll") / "runs" / run_id,
-        session.events,
+        () if session is None else session.events,
     )

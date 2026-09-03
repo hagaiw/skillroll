@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from typing import cast
+from typing import Any, cast
 
 from agents import (
     Agent,
@@ -19,7 +19,7 @@ from openai import AsyncOpenAI
 from skillroll.diagnostics import JSONValue
 from skillroll.inference.profile import ResolvedInference
 from skillroll.inference.transport import ModelUsage, ToolCall
-from skillroll.models import InferenceLimits
+from skillroll.models import ExecutionTopology, InferenceLimits
 from skillroll.runtime.execution import SdkExecution, WorldActionHandler
 
 
@@ -40,34 +40,45 @@ class AgentsSdkRuntime:
         user_input: str,
         profile: ResolvedInference,
         limits: InferenceLimits,
-        world_action: WorldActionHandler,
+        world_action: WorldActionHandler | None = None,
+        execution_topology: ExecutionTopology = "action_enabled",
     ) -> SdkExecution:
-        """Run one agent with only the generic world_action function tool."""
+        """Run one agent with the explicitly selected execution topology."""
+        if execution_topology not in {"action_enabled", "text_only"}:
+            raise ValueError("SkillRoll received an unsupported execution topology.")
         calls: list[ToolCall] = []
-
-        @function_tool(
-            name_override="world_action",
-            description_override=(
-                "Request one intended action and receive its observed result. "
-                'For a bundled file read, use tool_name="Read" with arguments '
-                '{"path":"references/file.md"}. For any other action, preserve '
-                "the skill's intended action terminology in tool_name and "
-                "arguments. The action name records intent; it does not need a "
-                "SkillRoll-specific spelling. Do not invent another tool."
-            ),
-            strict_mode=False,
-        )
-        async def call_world_action(
-            tool_name: str, arguments: dict[str, object]
-        ) -> str:
-            """Call the supplied world handler after checking bounded JSON input."""
-            if not tool_name or len(tool_name) > 200:
+        tools: list[Any] = []
+        if execution_topology == "action_enabled":
+            if world_action is None:
                 raise ValueError(
-                    "world_action tool_name must contain 1 to 200 characters."
+                    "Action-enabled execution requires a World action handler."
                 )
-            normalized = _json_object(arguments)
-            calls.append(ToolCall(str(len(calls) + 1), tool_name, normalized))
-            return await world_action(tool_name, normalized)
+
+            @function_tool(
+                name_override="world_action",
+                description_override=(
+                    "Request one intended action and receive its observed result. "
+                    'For a bundled file read, use tool_name="Read" with arguments '
+                    '{"path":"references/file.md"}. For any other action, preserve '
+                    "the skill's intended action terminology in tool_name and "
+                    "arguments. The action name records intent; it does not need a "
+                    "SkillRoll-specific spelling. Do not invent another tool."
+                ),
+                strict_mode=False,
+            )
+            async def call_world_action(
+                tool_name: str, arguments: dict[str, object]
+            ) -> str:
+                """Call the supplied world handler after checking bounded JSON input."""
+                if not tool_name or len(tool_name) > 200:
+                    raise ValueError(
+                        "world_action tool_name must contain 1 to 200 characters."
+                    )
+                normalized = _json_object(arguments)
+                calls.append(ToolCall(str(len(calls) + 1), tool_name, normalized))
+                return await world_action(tool_name, normalized)
+
+            tools.append(call_world_action)
 
         set_tracing_disabled(True)
         client = AsyncOpenAI(
@@ -82,7 +93,7 @@ class AgentsSdkRuntime:
                 name="SkillRoll evaluated skill",
                 instructions=instructions,
                 model=model,
-                tools=[call_world_action],
+                tools=tools,
                 model_settings=ModelSettings(
                     max_tokens=limits.max_output_tokens,
                     parallel_tool_calls=False,
@@ -113,6 +124,7 @@ class AgentsSdkRuntime:
                 usage,
                 tuple(calls),
                 turns_source,
+                execution_topology,
             )
         finally:
             await client.close()

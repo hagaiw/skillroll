@@ -11,6 +11,7 @@ from skillroll.diagnostics import Diagnostic, JSONValue, SourceLocation
 
 type GuardId = Literal["SCG2001"]
 type FindingDisposition = Literal["blocking", "advisory"]
+type ExecutionTopology = Literal["action_enabled", "text_only"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +164,7 @@ class EvalCase:
     rules: tuple[DeterministicRule, ...] = ()
     limits: CaseLimits = CaseLimits()
     assertions: tuple[Assertion, ...] = ()
+    execution_topology: ExecutionTopology = "action_enabled"
 
 
 @dataclass(frozen=True, slots=True)

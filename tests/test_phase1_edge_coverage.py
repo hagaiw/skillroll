@@ -292,7 +292,7 @@ def test_eval_parser_detects_size_read_failure_multiple_fences_and_empty_section
         case_source() + "\n```skillroll\nschema_version: 1\n```", encoding="utf-8"
     )
     assert parse_eval_case(path, skill).value is None
-    path.write_text(case_source().replace("\nworld\n", "\n\n"), encoding="utf-8")
+    path.write_text(case_source().replace("\ninput\n", "\n\n"), encoding="utf-8")
     assert parse_eval_case(path, skill).value is None
     monkeypatch.setattr("skillroll.evals.readable_utf8", lambda _: None)
     assert parse_eval_case(path, skill).value is None

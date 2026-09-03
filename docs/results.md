@@ -27,7 +27,11 @@ The main files are:
 
 The same directory also preserves the selected inputs, final response, judge
 decision, repository checks, and final verdict as JSON. Together they show what
-ran and why SkillRoll reached its outcome.
+ran and why SkillRoll reached its outcome. `run.json`, `execution.json`, and
+`result.json` record `execution_topology` as either `action_enabled` or
+`text_only`. A text-only run has no completed World actions; a tool attempt in
+that topology is a technical `ERROR` and its bounded details remain in the run
+evidence.
 
 Sampled runs and no-skill comparisons live under
 `.skillroll/experiments/`. Their comparison helps diagnose a case; it is not a
@@ -56,7 +60,8 @@ as a non-scoring diagnostic.
 ## Common problems
 
 - **No cases found:** put cases under a skill's `evals/` directory and include
-  `Input`, `World`, and `Success criteria`.
+  `Input` and `Success criteria`; add `World` only when the case needs external
+  actions.
 - **Endpoint configuration missing:** add `base_url`, `api_key_env`, and a
   model or profile, export the key, then run `doctor`.
 - **Doctor fails:** check the HTTPS URL, model, key, tool calling, and strict

@@ -22,6 +22,7 @@ from skillroll.models import (
     DeclaredCheck,
     DeterministicRule,
     EvalCase,
+    ExecutionTopology,
     ParsedResult,
     Skill,
 )
@@ -29,7 +30,7 @@ from skillroll.paths import parse_relative_path
 from skillroll.repository_io import readable_utf8
 from skillroll.safe_yaml import MetadataError, load_metadata
 
-_REQUIRED_SECTIONS = ("Input", "World", "Success criteria")
+_REQUIRED_SECTIONS = ("Input", "Success criteria")
 _STARTER_PLACEHOLDERS = {
     "Input": "Write the request or task that triggers the skill.",
     "World": (
@@ -479,9 +480,25 @@ def parse_eval_case(path: Path, skill: Skill) -> ParsedResult[EvalCase]:
             section_values[section_name] = found[0]
             if found[0].strip() == _STARTER_PLACEHOLDERS[section_name]:
                 errors.append(_placeholder_error(path, section_name, found[1]))
+    world = found_sections.get("World")
+    world_markdown = "" if world is None else world[0]
+    if world is not None and world_markdown.strip() == _STARTER_PLACEHOLDERS["World"]:
+        errors.append(_placeholder_error(path, "World", world[1]))
+    if not world_markdown.strip() and rules:
+        errors.append(
+            _error(
+                path,
+                "A missing or empty ## World section cannot use non-empty "
+                "deterministic `rules`.",
+                fence_line,
+            )
+        )
     if errors:
         return ParsedResult(None, tuple(errors))
     identity = skill.identity / PurePosixPath("evals") / path.name
+    execution_topology: ExecutionTopology = (
+        "action_enabled" if world_markdown.strip() else "text_only"
+    )
     return ParsedResult(
         EvalCase(
             path=path,
@@ -489,12 +506,13 @@ def parse_eval_case(path: Path, skill: Skill) -> ParsedResult[EvalCase]:
             skill=skill,
             title=title(source),
             input_markdown=section_values["Input"],
-            world_markdown=section_values["World"],
+            world_markdown=world_markdown,
             success_criteria_markdown=section_values["Success criteria"],
             checks=checks,
             assertions=assertions,
             rules=rules,
             limits=limits,
+            execution_topology=execution_topology,
         ),
         (),
     )

@@ -43,6 +43,8 @@ packages = ["src/skillroll"]
 "src/skillroll/_assets/setup-mascot.ansi" = "skillroll/_assets/setup-mascot.ansi"
 "plugins/harness-prompts/skills/executor-prompt/references/system.md" = "skillroll/_harness_prompts/executor-prompt/references/system.md"
 "plugins/harness-prompts/skills/executor-prompt/references/omission.md" = "skillroll/_harness_prompts/executor-prompt/references/omission.md"
+"plugins/harness-prompts/skills/executor-prompt/references/text-only.md" = "skillroll/_harness_prompts/executor-prompt/references/text-only.md"
+"plugins/harness-prompts/skills/executor-prompt/references/text-only-omission.md" = "skillroll/_harness_prompts/executor-prompt/references/text-only-omission.md"
 "plugins/harness-prompts/skills/world-simulator-prompt/references/system.md" = "skillroll/_harness_prompts/world-simulator-prompt/references/system.md"
 "plugins/harness-prompts/skills/semantic-judge-prompt/references/system.md" = "skillroll/_harness_prompts/semantic-judge-prompt/references/system.md"
 
@@ -54,6 +56,8 @@ include = [
   "src/skillroll",
   "plugins/harness-prompts/skills/executor-prompt/references/system.md",
   "plugins/harness-prompts/skills/executor-prompt/references/omission.md",
+  "plugins/harness-prompts/skills/executor-prompt/references/text-only.md",
+  "plugins/harness-prompts/skills/executor-prompt/references/text-only-omission.md",
   "plugins/harness-prompts/skills/world-simulator-prompt/references/system.md",
   "plugins/harness-prompts/skills/semantic-judge-prompt/references/system.md",
   "LICENSE",

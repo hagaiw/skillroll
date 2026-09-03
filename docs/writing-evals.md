@@ -3,13 +3,17 @@
 One eval is one Markdown file beside a skill. It describes:
 
 - `Input`: what the user asks;
-- `World`: what is true outside the skill; and
+- `World`: what is true outside the skill (optional); and
 - `Success criteria`: what good behavior looks like.
 
-The Dungeon Master is a controlled simulator that plays the World. Whenever the
-skill tries to use a tool, service, command, or other external capability, the
-Dungeon Master returns a result that fits your description. You write the
-situation, not a mock framework or a skill-specific test harness.
+When `World` contains non-whitespace text, the Dungeon Master is a controlled
+simulator that plays it. Whenever the skill tries to use a tool, service,
+command, or other external capability, the Dungeon Master returns a result that
+fits your description. You write the situation, not a mock framework or a
+skill-specific test harness. If `World` is omitted or empty, the case is
+text-only: SkillRoll gives the skill no tools and does not create a World
+simulator or session. The skill still runs and the semantic judge still checks
+its final response against the criteria.
 
 Keep each case under the selected skill's `evals/` directory and test one
 important behavior.
@@ -27,7 +31,7 @@ When run from a nested directory, `new` walks up to the nearest
 want to select a different repository explicitly.
 
 SkillRoll creates `my-skill/evals/wait-for-ci.eval.md` without replacing
-existing work. Fill its three sections:
+existing work. Fill its three sections for an action-enabled case:
 
 ```markdown
 # Wait for required CI
@@ -65,7 +69,16 @@ possible, and allow equivalent wording and reasonable action choices. A
 promise to act later is not completed work. Plausible code is not proof that
 it runs.
 
-For a text-only case, say that no external interaction is needed.
+For a text-only case, omit `## World` (or leave it empty) and say in `Input`
+what response the skill should produce. Do not add deterministic `rules` to a
+case without a non-empty World; rules describe simulated actions and are
+rejected without that action-enabled topology.
+
+Every evaluation, including a text-only one, first uses SkillRoll's one general
+model-compatibility check. That existing preflight verifies tool calling and
+strict structured output for the configured endpoint before any case runs; it
+does not add a World action tool to a text-only case or create a second
+case-specific preflight.
 
 ## Use the prompt development loop
 

@@ -73,18 +73,21 @@ an exact script, and the report shows why it failed.
 ## The same framework fits any skill
 
 - `Input` is the request or task that invokes the skill.
-- `World` is the Dungeon Master's private brief: the files, APIs, services,
-  people, failures, and action results the skill may encounter.
+- `World` is the optional Dungeon Master's private brief: the files, APIs,
+  services, people, failures, and action results the skill may encounter. If
+  it is missing or empty, SkillRoll runs the case text-only with no tools or
+  World simulator.
 - `Success criteria` tell the judge what observable behavior must hold.
 
 A release skill can encounter CI that is still running. A browser skill can
 find a failed request behind a success message. A support skill can spot an
 open chargeback before issuing a refund.
 
-The skill receives the Input, not the World. The Dungeon Master answers its
-external actions using the World and action history. Deterministic rules can
-provide exact results when needed. The judge compares the resulting evidence
-with the success criteria.
+The skill receives the Input, not the World. In an action-enabled case, the
+Dungeon Master answers its external actions using the World and action history;
+deterministic rules can provide exact results when needed. In a text-only case,
+there is no action boundary to call. The judge compares the resulting evidence
+with the success criteria in either topology.
 
 ```text
 INPUT ──→ SKILL ←──→ DUNGEON MASTER

@@ -396,6 +396,7 @@ def _result_summary(
     return {
         "skill": case.skill.identity.as_posix(),
         "case": case.identity.as_posix(),
+        "execution_topology": case.execution_topology,
         "overall": {
             "outcome": outcome,
             "explanation": overall_explanation,
@@ -408,6 +409,7 @@ def _result_summary(
             "model_profile": profile_name,
             "model_profile_purpose": profile_purpose,
             "skill_instructions_available": skill_available,
+            "execution_topology": case.execution_topology,
             "model_turns_used": None if execution is None else execution.turns,
             "model_turns_source": (
                 "unavailable" if execution is None else execution.turns_source
@@ -653,6 +655,7 @@ async def evaluate_repository(
                                         "world": _world_usage(events, profile.model),
                                     },
                                     turns_source=execution.turns_source,
+                                    execution_topology=case.execution_topology,
                                 ),
                             ),
                             (
@@ -790,6 +793,7 @@ async def evaluate_repository(
                                     model_profile=profile.profile_name,
                                     model_profile_purpose=profile.profile_purpose,
                                     skill_available=skill_available,
+                                    execution_topology=case.execution_topology,
                                 ),
                             ),
                         )

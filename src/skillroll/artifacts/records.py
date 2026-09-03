@@ -72,6 +72,7 @@ class RunFacts:
     profile_name: str | None = None
     profile_purpose: str | None = None
     skill_available: bool = True
+    execution_topology: str = "action_enabled"
 
 
 def run_bytes(facts: RunFacts) -> bytes:
@@ -84,6 +85,7 @@ def run_bytes(facts: RunFacts) -> bytes:
         "skill": facts.skill,
         "case": facts.case,
         "skill_instructions_available": facts.skill_available,
+        "execution_topology": facts.execution_topology,
         "title": facts.title,
         "profile": {
             "base_url": facts.base_url,
@@ -122,6 +124,7 @@ def report_bytes(facts: RunFacts) -> bytes:
         f"- Model: `{facts.model}`",
         "- Skill instructions: "
         + ("available" if facts.skill_available else "intentionally omitted"),
+        f"- Execution topology: `{facts.execution_topology}`",
         "- Effective limits: "
         + ", ".join(
             f"{name}={value}" for name, value in facts.effective_limits.items()
@@ -202,6 +205,7 @@ def final_report_bytes(
     model_profile: str | None = None,
     model_profile_purpose: str | None = None,
     skill_available: bool = True,
+    execution_topology: str = "action_enabled",
 ) -> bytes:
     """Render a final report in terms a new maintainer can act on."""
     if finished is None:
@@ -219,6 +223,7 @@ def final_report_bytes(
         f"- Eval case: `{case}`",
         "- Skill instructions: "
         + ("available" if skill_available else "intentionally omitted"),
+        f"- Execution topology: `{execution_topology}`",
         f"- Result: **{outcome}**",
         "- Skill finished: " + ("yes" if finished else "no"),
     ]
@@ -351,6 +356,7 @@ def execution_bytes(
     usage: object,
     *,
     turns_source: str = "unavailable",
+    execution_topology: str = "action_enabled",
 ) -> bytes:
     """Render completed execution facts before a repository check can begin."""
     return canonical_json(
@@ -359,6 +365,7 @@ def execution_bytes(
             "final_output": final_output,
             "turns_used": turns,
             "turns_source": turns_source,
+            "execution_topology": execution_topology,
             "usage": usage,
         }
     )

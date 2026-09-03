@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
@@ -15,7 +16,7 @@ from skillroll.inference.profile import (
     SecretRedactor,
 )
 from skillroll.inference.transport import ModelUsage, ToolCall
-from skillroll.models import InferenceLimits, Skill
+from skillroll.models import ExecutionTopology, InferenceLimits, Skill
 from skillroll.prompt_resources import load_harness_prompt
 
 _MAX_INPUT_BYTES = 64 * 1024
@@ -37,6 +38,7 @@ class ExecutionRequest:
     skill: Skill | None
     user_input: str
     limits: InferenceLimits
+    execution_topology: ExecutionTopology = "action_enabled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +50,7 @@ class ExecutionResult:
     usage: tuple[ModelUsage, ...]
     tool_calls: tuple[ToolCall, ...]
     turns_source: str = "unavailable"
+    execution_topology: ExecutionTopology = "action_enabled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +65,7 @@ class SkillExecutor(Protocol):
     """The phase-four evaluator depends only on this execution seam."""
 
     async def execute(
-        self, request: ExecutionRequest, world_action: WorldActionHandler
+        self, request: ExecutionRequest, world_action: WorldActionHandler | None = None
     ) -> ExecutionAttempt: ...
 
 
@@ -75,6 +78,7 @@ class SdkExecution:
     usage: tuple[ModelUsage, ...]
     tool_calls: tuple[ToolCall, ...]
     turns_source: str = "unavailable"
+    execution_topology: ExecutionTopology = "action_enabled"
 
 
 class SdkRuntime(Protocol):
@@ -86,7 +90,8 @@ class SdkRuntime(Protocol):
         user_input: str,
         profile: ResolvedInference,
         limits: InferenceLimits,
-        world_action: WorldActionHandler,
+        world_action: WorldActionHandler | None,
+        execution_topology: ExecutionTopology = "action_enabled",
     ) -> SdkExecution: ...
 
 
@@ -121,6 +126,32 @@ def omitted_skill_instructions() -> str:
     return load_harness_prompt("executor_omission")
 
 
+def text_only_wrapped_instructions(skill_text: str) -> str:
+    """Add the fixed no-action contract before preserving SKILL.md verbatim."""
+    return load_harness_prompt("executor_text_only") + "\n" + skill_text
+
+
+def text_only_omitted_skill_instructions() -> str:
+    """Instructions for a text-only diagnostic run without SKILL.md."""
+    return load_harness_prompt("executor_text_only_omission")
+
+
+def _unexpected_tool_details(tool_calls: tuple[ToolCall, ...]) -> tuple[str, ...]:
+    """Preserve normalized rogue calls as bounded, redactor-safe failure facts."""
+    return tuple(
+        "Unexpected tool call in text-only mode: "
+        + call.name
+        + " "
+        + json.dumps(
+            call.arguments,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for call in tool_calls
+    )
+
+
 class AgentSkillExecutor:
     """Timeout/cancellation-safe bridge from a validated skill to the SDK."""
 
@@ -129,7 +160,7 @@ class AgentSkillExecutor:
         self._runtime = runtime
 
     async def execute(
-        self, request: ExecutionRequest, world_action: WorldActionHandler
+        self, request: ExecutionRequest, world_action: WorldActionHandler | None = None
     ) -> ExecutionAttempt:
         """Execute once, with local input checks before any model interaction."""
         if len(request.user_input.encode("utf-8")) > _MAX_INPUT_BYTES:
@@ -140,14 +171,34 @@ class AgentSkillExecutor:
                     "The evaluation input is larger than SkillRoll's 64 KiB limit.",
                 ),
             )
+        if request.execution_topology == "text_only":
+            action_handler = None
+        elif request.execution_topology == "action_enabled":
+            action_handler = world_action
+        else:
+            return ExecutionAttempt(
+                None,
+                InferenceFailure(
+                    InferenceFailureKind.EXECUTION_ERROR,
+                    "SkillRoll received an unsupported execution topology.",
+                ),
+            )
         if request.skill is None:
-            instructions = omitted_skill_instructions()
+            instructions = (
+                text_only_omitted_skill_instructions()
+                if request.execution_topology == "text_only"
+                else omitted_skill_instructions()
+            )
         else:
             text, failure = load_skill_text(request.skill)
             if failure is not None:
                 return ExecutionAttempt(None, failure)
             assert text is not None
-            instructions = wrapped_instructions(text)
+            instructions = (
+                text_only_wrapped_instructions(text)
+                if request.execution_topology == "text_only"
+                else wrapped_instructions(text)
+            )
         try:
             async with asyncio.timeout(request.limits.timeout_seconds):
                 executed = await self._runtime.run(
@@ -155,7 +206,8 @@ class AgentSkillExecutor:
                     request.user_input,
                     self._profile,
                     request.limits,
-                    world_action,
+                    action_handler,
+                    request.execution_topology,
                 )
         except TimeoutError:
             return ExecutionAttempt(
@@ -183,6 +235,19 @@ class AgentSkillExecutor:
                     (redactor.redact(str(error)),),
                 ),
             )
+        if request.execution_topology == "text_only" and executed.tool_calls:
+            redactor = SecretRedactor(self._profile.api_key)
+            return ExecutionAttempt(
+                None,
+                InferenceFailure(
+                    InferenceFailureKind.EXECUTION_ERROR,
+                    "The skill made an unexpected tool call in text-only mode.",
+                    tuple(
+                        redactor.redact(detail)
+                        for detail in _unexpected_tool_details(executed.tool_calls)
+                    ),
+                ),
+            )
         return ExecutionAttempt(
             ExecutionResult(
                 executed.final_output.strip(),
@@ -190,6 +255,7 @@ class AgentSkillExecutor:
                 executed.usage,
                 executed.tool_calls,
                 executed.turns_source,
+                request.execution_topology,
             ),
             None,
         )

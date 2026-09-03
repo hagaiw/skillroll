@@ -77,6 +77,8 @@ from skillroll.models import (
 from skillroll.outcomes import Outcome
 from skillroll.runtime.attempt import PreliminaryAttempt
 from skillroll.runtime.execution import (
+    ExecutionAttempt,
+    ExecutionRequest,
     ExecutionResult,
     omitted_skill_instructions,
     wrapped_instructions,
@@ -1512,6 +1514,78 @@ def test_evaluate_repository_runs_one_preflight_execution_judge_and_check(
     assert '"semantic_judgment"' in result_text
     assert "preliminary" not in (directory / "report.md").read_text(encoding="utf-8")
     assert transport.closed
+
+
+def test_evaluate_text_only_runs_skill_and_judge_without_world_action(
+    tmp_path: Path,
+) -> None:
+    case = replace(
+        case_at(tmp_path),
+        input_markdown=(
+            "Summarize the release policy in the request and state the next "
+            "review step."
+        ),
+        world_markdown="",
+        execution_topology="text_only",
+    )
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings(
+            "https://example.test/v1", "tiny", "KEY", InferenceLimits(2, 10, 256)
+        ),
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+    judge_response = ChatResponse(
+        '{"verdict":"PASS","rationale":"The response meets the criterion.",'
+        '"criteria":[{"criterion":"success","status":"met",'
+        '"evidence":"The final response states the next review step."}],'
+        '"unmet_criteria":[]}',
+        (),
+        "tiny",
+        ModelUsage(12, 4, 16),
+    )
+    transport = ScriptedTransport([*preflight_responses()[:2], judge_response])
+
+    class TextOnlyExecutor:
+        async def execute(
+            self, request: ExecutionRequest, world_action: object
+        ) -> ExecutionAttempt:
+            assert request.execution_topology == "text_only"
+            assert world_action is None
+            return ExecutionAttempt(
+                ExecutionResult("The next review step is policy review.", 1, (), ()),
+                None,
+            )
+
+    result = asyncio.run(
+        evaluate.evaluate_repository(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            transport_factory=lambda _: transport,
+            executor_factory=lambda _: TextOnlyExecutor(),
+        )
+    )
+    assert not isinstance(result, InferenceFailure)
+    assert result[0].outcome == "PASS"
+    assert result[0].judge is not None
+    assert result[0].events == ()
+    assert len(transport.requests) == 3
+    directory = tmp_path / result[0].artifact_directory
+    saved = json.loads((directory / "result.json").read_text(encoding="utf-8"))
+    assert saved["execution_topology"] == "text_only"
+    assert saved["execution"]["execution_topology"] == "text_only"
+    assert saved["execution"]["world_actions_used"] == 0
+    execution = json.loads((directory / "execution.json").read_text(encoding="utf-8"))
+    assert execution["execution_topology"] == "text_only"
+    assert "Execution topology: `text_only`" in (directory / "report.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_authoring_experiment_pairs_skill_and_omission_runs(tmp_path: Path) -> None:
