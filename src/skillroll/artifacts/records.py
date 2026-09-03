@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from skillroll.artifacts.hashes import InputHash
+from skillroll.inference.profile import SecretRedactor
+from skillroll.inference.transport import ToolCall
 from skillroll.world.session import WorldEvent
 
 ARTIFACT_FORMAT_VERSION = 2
+MAX_EXECUTION_TOOL_CALLS = 32
+MAX_EXECUTION_ARGUMENT_BYTES = 64 * 1024
 
 
 def canonical_json(value: object) -> bytes:
@@ -202,6 +207,8 @@ def final_report_bytes(
     model_profile: str | None = None,
     model_profile_purpose: str | None = None,
     skill_available: bool = True,
+    declared_assertions: int = 0,
+    declared_checks: int = 0,
 ) -> bytes:
     """Render a final report in terms a new maintainer can act on."""
     if finished is None:
@@ -292,7 +299,13 @@ def final_report_bytes(
                     lines.append(f"  Evidence: {evidence}")
     lines.extend(("", "## Exact checks", ""))
     if not assertions:
-        lines.append("No exact fact checks were declared for this case.")
+        if declared_assertions:
+            lines.append(
+                "Declared exact fact checks were not run because the eval stopped "
+                "before they could run."
+            )
+        else:
+            lines.append("No exact fact checks were declared for this case.")
     for assertion in assertions:
         marker = "passed" if assertion.get("passed") else "failed"
         kind = str(assertion.get("kind", "unknown"))
@@ -308,7 +321,13 @@ def final_report_bytes(
             lines.append(f"  Observed: {observed}")
     lines.extend(("", "## Repository checks", ""))
     if not checks:
-        lines.append("No repository checks were declared for this case.")
+        if declared_checks:
+            lines.append(
+                "Declared repository checks were not run because the eval stopped "
+                "before they could run."
+            )
+        else:
+            lines.append("No repository checks were declared for this case.")
     for check in checks:
         lines.append(
             f"- {check.get('name', 'Unnamed check')}: "
@@ -351,17 +370,64 @@ def execution_bytes(
     usage: object,
     *,
     turns_source: str = "unavailable",
+    tool_calls: tuple[ToolCall, ...] = (),
+    redactor: SecretRedactor | None = None,
 ) -> bytes:
-    """Render completed execution facts before a repository check can begin."""
-    return canonical_json(
-        {
-            "format_version": ARTIFACT_FORMAT_VERSION,
-            "final_output": final_output,
-            "turns_used": turns,
-            "turns_source": turns_source,
-            "usage": usage,
+    """Render observed execution facts before semantic judgment can begin."""
+    values: dict[str, object] = {
+        "format_version": ARTIFACT_FORMAT_VERSION,
+        "final_output": final_output,
+        "turns_used": turns,
+        "turns_source": turns_source,
+        "usage": usage,
+    }
+    if tool_calls:
+        retained = tool_calls[:MAX_EXECUTION_TOOL_CALLS]
+        values["tool_calls"] = [
+            _execution_tool_call(call, redactor) for call in retained
+        ]
+        omitted = len(tool_calls) - len(retained)
+        if omitted:
+            values["tool_calls_omitted"] = omitted
+    return canonical_json(values)
+
+
+def _redact_execution_value(value: object, redactor: SecretRedactor) -> object:
+    """Redact string values in a JSON-shaped tool argument before encoding."""
+    if isinstance(value, str):
+        return redactor.redact(value)
+    if isinstance(value, Mapping):
+        return {
+            redactor.redact(key)
+            if isinstance(key, str)
+            else key: _redact_execution_value(item, redactor)
+            for key, item in value.items()
         }
-    )
+    if isinstance(value, (list, tuple)):
+        return [_redact_execution_value(item, redactor) for item in value]
+    return value
+
+
+def _execution_tool_call(
+    call: ToolCall, redactor: SecretRedactor | None
+) -> dict[str, object]:
+    """Render one bounded, secret-safe attempted tool call."""
+    if redactor is None:
+        call_id = call.id
+        name = call.name
+        arguments: object = dict(call.arguments)
+    else:
+        call_id = redactor.redact(call.id)
+        name = redactor.redact(call.name)
+        arguments = _redact_execution_value(call.arguments, redactor)
+    encoded_arguments = canonical_json(arguments)
+    if len(encoded_arguments) > MAX_EXECUTION_ARGUMENT_BYTES:
+        arguments = {
+            "omitted": True,
+            "bytes": len(encoded_arguments),
+            "sha256": hashlib.sha256(encoded_arguments).hexdigest(),
+        }
+    return {"id": call_id, "name": name, "arguments": arguments}
 
 
 def judge_bytes(judge: object, exact_fact_checks: object) -> bytes:

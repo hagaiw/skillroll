@@ -22,12 +22,16 @@ Model-backed runs are private by default under `.skillroll/runs/<run-id>/`.
 The main files are:
 
 - `report.md`: the result for a person to read;
-- `transcript.jsonl`: the skill's actions and the Dungeon Master's replies; and
+- `transcript.jsonl`: completed World actions and the Dungeon Master's replies;
+- `execution.json`: the final response, usage, and any attempted tool calls; and
 - `result.json`: the result for automation.
 
-The same directory also preserves the selected inputs, final response, judge
-decision, repository checks, and final verdict as JSON. Together they show what
-ran and why SkillRoll reached its outcome.
+The transcript records only actions that reached the World. If a run produces
+final execution facts but then hits an execution boundary, `execution.json`
+retains the reported final response and attempted calls while the judge and
+repository checks remain unrun. The same directory also preserves the selected
+inputs, judge decision, repository checks, and final verdict as JSON. Together
+they show what ran and why SkillRoll reached its outcome.
 
 Sampled runs and no-skill comparisons live under
 `.skillroll/experiments/`. Their comparison helps diagnose a case; it is not a

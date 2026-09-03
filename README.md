@@ -263,8 +263,9 @@ output_per_million = 1.20
 
 Each run is saved under `.skillroll/runs/`. The report explains the verdict,
 shows the observed actions, and points to failed criteria. `result.json` is
-available for automation; `transcript.jsonl` contains the complete action
-history.
+available for automation; `transcript.jsonl` contains completed World action
+history, while `execution.json` preserves the final response and any reported
+attempted calls.
 
 | Outcome | Meaning |
 | --- | --- |

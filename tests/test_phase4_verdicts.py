@@ -16,6 +16,8 @@ import pytest
 from skillroll import checks as checks_module
 from skillroll.artifacts import store as store_module
 from skillroll.artifacts.records import (
+    MAX_EXECUTION_ARGUMENT_BYTES,
+    MAX_EXECUTION_TOOL_CALLS,
     checks_bytes,
     execution_bytes,
     experiment_report_bytes,
@@ -77,6 +79,7 @@ from skillroll.models import (
 from skillroll.outcomes import Outcome
 from skillroll.runtime.attempt import PreliminaryAttempt
 from skillroll.runtime.execution import (
+    ExecutionAttempt,
     ExecutionResult,
     omitted_skill_instructions,
     wrapped_instructions,
@@ -353,6 +356,44 @@ def test_result_separates_completed_execution_from_judge_failure(
     assert execution["status"] == "completed"
     assert execution["final_response_produced"] is True
     assert technical["stage"] == "semantic_judgment"
+
+
+def test_result_marks_declared_gates_that_stopped_before_running(
+    tmp_path: Path,
+) -> None:
+    check = DeclaredCheck("check", "unused", (), SourceLocation())
+    case = replace(
+        case_at(tmp_path, check),
+        assertions=(Assertion("final_output_contains", expected_text="done"),),
+    )
+    summary = evaluate._result_summary(
+        case,
+        "ERROR",
+        ExecutionResult("done", 1, (), ()),
+        (),
+        InferenceLimits(),
+        None,
+        (),
+        (),
+        InferenceFailure(
+            InferenceFailureKind.JUDGE_INTEGRITY,
+            "The judge response was contradictory.",
+            stage="semantic_judgment",
+        ),
+        "provider/model",
+        failure_stage="semantic_judgment",
+    )
+
+    assert summary["exact_fact_checks"] == {
+        "status": "not_run",
+        "declared_count": 1,
+        "items": [],
+    }
+    assert summary["trusted_repository_checks"] == {
+        "status": "not_run",
+        "declared_count": 1,
+        "items": (),
+    }
 
 
 def preflight_responses() -> list[ChatResponse]:
@@ -1223,6 +1264,13 @@ def test_artifact_final_renderers_and_append_are_redacted(tmp_path: Path) -> Non
         tmp_path, SecretRedactor(SecretValue("secret")), id_factory=lambda: "id"
     )
     _, directory, _ = store.create()
+    call = ToolCall("call-1", "Write", {"token": "secret"})
+    serialized = json.loads(
+        execution_bytes("normal", 1, [], tool_calls=(call,)).decode("utf-8")
+    )
+    assert serialized["tool_calls"] == [
+        {"id": "call-1", "name": "Write", "arguments": {"token": "secret"}}
+    ]
     store.append(
         directory,
         (
@@ -1236,6 +1284,58 @@ def test_artifact_final_renderers_and_append_are_redacted(tmp_path: Path) -> Non
     assert (directory / "verdict.json").exists()
     with pytest.raises(ArtifactError):
         store.append(directory, (("../unsafe", b"x"),))
+
+
+def test_execution_evidence_bounds_calls_and_arguments_without_changing_facts() -> None:
+    calls = (
+        ToolCall(
+            "large",
+            "Write",
+            {"payload": "x" * MAX_EXECUTION_ARGUMENT_BYTES},
+        ),
+        *tuple(
+            ToolCall(f"call-{index}", "Write", {"index": index})
+            for index in range(MAX_EXECUTION_TOOL_CALLS)
+        ),
+    )
+    serialized = json.loads(
+        execution_bytes("done", 1, (), tool_calls=calls).decode("utf-8")
+    )
+
+    retained = serialized["tool_calls"]
+    assert len(retained) == MAX_EXECUTION_TOOL_CALLS
+    assert serialized["tool_calls_omitted"] == 1
+    assert serialized["final_output"] == "done"
+    assert serialized["turns_used"] == 1
+    assert retained[0]["arguments"]["omitted"] is True
+    assert retained[0]["arguments"]["bytes"] > MAX_EXECUTION_ARGUMENT_BYTES
+    assert len(retained[0]["arguments"]["sha256"]) == 64
+
+
+def test_execution_evidence_redacts_nested_values_before_encoding() -> None:
+    secret = 'quote"\nslash\\'
+    encoded = execution_bytes(
+        "done",
+        1,
+        (),
+        tool_calls=(
+            ToolCall(
+                "call-1",
+                "Write",
+                {"nested": {"token": secret, "items": [secret]}},
+            ),
+        ),
+        redactor=SecretRedactor(SecretValue(secret)),
+    )
+
+    assert secret.encode("utf-8") not in encoded
+    serialized = json.loads(encoded.decode("utf-8"))
+    assert serialized["tool_calls"][0]["arguments"] == {
+        "nested": {
+            "items": ["[redacted]"],
+            "token": "[redacted]",
+        }
+    }
 
 
 def test_final_report_and_check_logs_are_friendly_and_redacted(tmp_path: Path) -> None:
@@ -1512,6 +1612,142 @@ def test_evaluate_repository_runs_one_preflight_execution_judge_and_check(
     assert '"semantic_judgment"' in result_text
     assert "preliminary" not in (directory / "report.md").read_text(encoding="utf-8")
     assert transport.closed
+
+
+def test_evaluate_preserves_attempted_calls_not_in_world_transcript(
+    tmp_path: Path,
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings(
+            "https://example.test/v1", "tiny", "KEY", InferenceLimits(2, 10, 256)
+        ),
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+    secret = 'quote"\nslash\\'
+
+    class ExecutorWithUncompletedCall:
+        async def execute(self, request: object, world_action: object) -> object:
+            del request, world_action
+            return ExecutionAttempt(
+                ExecutionResult(
+                    "final answer",
+                    1,
+                    (ModelUsage(10, 4, 14),),
+                    (
+                        ToolCall(
+                            "attempted-1",
+                            "Write",
+                            {"nested": [{"token": secret}, {"value": secret}]},
+                        ),
+                    ),
+                ),
+                None,
+            )
+
+    responses = preflight_responses()
+    responses[-1] = ChatResponse("not json", (), "tiny", ModelUsage(3, 2, 5))
+    transport = ScriptedTransport(responses)
+    result = asyncio.run(
+        evaluate.evaluate_repository(
+            config,
+            (case,),
+            environment={"KEY": secret},
+            run_commands=False,
+            transport_factory=lambda _: transport,
+            executor_factory=lambda _: ExecutorWithUncompletedCall(),
+        )
+    )
+
+    assert not isinstance(result, InferenceFailure)
+    assert result[0].outcome == "ERROR"
+    assert result[0].events == ()
+    assert result[0].failure is not None
+    assert result[0].failure.stage == "semantic_judgment"
+    directory = tmp_path / result[0].artifact_directory
+    execution = json.loads((directory / "execution.json").read_text(encoding="utf-8"))
+    assert execution["final_output"] == "final answer"
+    assert execution["turns_used"] == 1
+    assert execution["usage"]["execution"]["calls"][0]["total_tokens"] == 14
+    execution_text = (directory / "execution.json").read_text(encoding="utf-8")
+    assert secret not in execution_text
+    assert execution["tool_calls"] == [
+        {
+            "id": "attempted-1",
+            "name": "Write",
+            "arguments": {
+                "nested": [
+                    {"token": "[redacted]"},
+                    {"value": "[redacted]"},
+                ]
+            },
+        }
+    ]
+    assert (directory / "transcript.jsonl").read_bytes() == b""
+
+
+def test_evaluate_keeps_verdict_when_execution_evidence_is_bounded(
+    tmp_path: Path,
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings(
+            "https://example.test/v1", "tiny", "KEY", InferenceLimits(2, 10, 256)
+        ),
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+
+    calls = (
+        ToolCall(
+            "large",
+            "Write",
+            {"payload": "x" * MAX_EXECUTION_ARGUMENT_BYTES},
+        ),
+        *tuple(
+            ToolCall(f"call-{index}", "Write", {"index": index})
+            for index in range(MAX_EXECUTION_TOOL_CALLS)
+        ),
+    )
+
+    class ExecutorWithBoundedEvidence:
+        async def execute(self, request: object, world_action: object) -> object:
+            del request, world_action
+            return ExecutionAttempt(
+                ExecutionResult("final answer", 1, (), calls),
+                None,
+            )
+
+    responses = preflight_responses()
+    responses.pop(2)
+    transport = ScriptedTransport(responses)
+    result = asyncio.run(
+        evaluate.evaluate_repository(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            transport_factory=lambda _: transport,
+            executor_factory=lambda _: ExecutorWithBoundedEvidence(),
+        )
+    )
+
+    assert not isinstance(result, InferenceFailure)
+    assert result[0].outcome == "PASS", result[0].failure
+    directory = tmp_path / result[0].artifact_directory
+    execution = json.loads((directory / "execution.json").read_text(encoding="utf-8"))
+    assert len(execution["tool_calls"]) == MAX_EXECUTION_TOOL_CALLS
+    assert execution["tool_calls_omitted"] == 1
+    assert execution["tool_calls"][0]["arguments"]["omitted"] is True
 
 
 def test_authoring_experiment_pairs_skill_and_omission_runs(tmp_path: Path) -> None:
@@ -1888,6 +2124,13 @@ def test_evaluate_records_judge_failure_as_a_semantic_stage_error(
     assert '"stage":"semantic_judgment"' in summary
     assert '"provider finish_reason: length"' in summary
     assert "ERROR, not a skill FAIL" in summary
+
+    execution = json.loads(
+        (tmp_path / result[0].artifact_directory / "execution.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert execution["final_output"] == "overview written"
 
 
 def test_evaluate_keeps_a_fallback_limit_for_an_invalid_direct_case(

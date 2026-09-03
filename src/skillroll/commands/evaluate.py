@@ -216,6 +216,17 @@ def _trusted_status(checks: tuple[CheckResult, ...]) -> str:
     return "passed"
 
 
+def _skipped_declaration_count(
+    declared_count: int,
+    observed_count: int,
+    failure: InferenceFailure | None,
+) -> int:
+    """Keep declared-but-unobserved gates distinct from absent gates."""
+    if failure is not None and observed_count == 0:
+        return declared_count
+    return 0
+
+
 def _overall_text(
     outcome: str,
     judged: JudgeResult | None,
@@ -376,6 +387,12 @@ def _result_summary(
         if check_failure is None
         else (check_failure.detail,)
     )
+    skipped_assertion_count = _skipped_declaration_count(
+        len(case.assertions), len(assertions), failure
+    )
+    skipped_check_count = _skipped_declaration_count(
+        len(case.checks), len(checks), failure
+    )
     execution_usage = _usage_records(
         None if execution is None else execution.usage,
         stage="execution",
@@ -426,14 +443,16 @@ def _result_summary(
             else "not_run",
             **({} if judge_data is None else judge_data),
         },
-        "exact_fact_checks": {
-            "status": _fact_status(assertions),
-            "items": _assertions(assertions),
-        },
-        "trusted_repository_checks": {
-            "status": _trusted_status(checks),
-            "items": _checks(checks),
-        },
+        "exact_fact_checks": _gate_summary(
+            _fact_status(assertions),
+            _assertions(assertions),
+            skipped_assertion_count,
+        ),
+        "trusted_repository_checks": _gate_summary(
+            _trusted_status(checks),
+            _checks(checks),
+            skipped_check_count,
+        ),
         "technical_status": {
             "status": technical_status,
             "stage": technical_stage,
@@ -459,6 +478,19 @@ def _assertions(values: tuple[AssertionResult, ...]) -> list[dict[str, object]]:
         }
         for item in values
     ]
+
+
+def _gate_summary(
+    status: str,
+    items: list[dict[str, object]] | tuple[dict[str, object], ...],
+    declared_count: int,
+) -> dict[str, object]:
+    """Render a gate status without implying skipped declarations were absent."""
+    summary: dict[str, object] = {"status": status, "items": items}
+    if status == "not_declared" and declared_count:
+        summary["status"] = "not_run"
+        summary["declared_count"] = declared_count
+    return summary
 
 
 def _checks(values: tuple[CheckResult, ...]) -> tuple[dict[str, object], ...]:
@@ -621,20 +653,7 @@ async def evaluate_repository(
                 if preliminary.artifact_directory is None
                 else config.repository_root / preliminary.artifact_directory
             )
-            if failure is None and execution is not None and directory is not None:
-                assertions = evaluate_assertions(
-                    case.assertions, execution.final_output
-                )
-                judged, failure = await judge(
-                    replace(profile, limits=limits),
-                    transport,
-                    case,
-                    execution,
-                    events,
-                    skill_available=skill_available,
-                )
-                if failure is not None:
-                    failure_stage = "semantic_judgment"
+            if execution is not None and directory is not None:
                 try:
                     store.append(
                         directory,
@@ -653,8 +672,35 @@ async def evaluate_repository(
                                         "world": _world_usage(events, profile.model),
                                     },
                                     turns_source=execution.turns_source,
+                                    tool_calls=execution.tool_calls,
+                                    redactor=redactor,
                                 ),
                             ),
+                        ),
+                    )
+                except ArtifactError as error:
+                    failure = InferenceFailure(
+                        InferenceFailureKind.EXECUTION_ERROR, str(error)
+                    )
+                    failure_stage = "evidence_writing"
+            if failure is None and execution is not None and directory is not None:
+                assertions = evaluate_assertions(
+                    case.assertions, execution.final_output
+                )
+                judged, failure = await judge(
+                    replace(profile, limits=limits),
+                    transport,
+                    case,
+                    execution,
+                    events,
+                    skill_available=skill_available,
+                )
+                if failure is not None:
+                    failure_stage = "semantic_judgment"
+                try:
+                    store.append(
+                        directory,
+                        (
                             (
                                 "judge.json",
                                 judge_bytes(
@@ -790,6 +836,16 @@ async def evaluate_repository(
                                     model_profile=profile.profile_name,
                                     model_profile_purpose=profile.profile_purpose,
                                     skill_available=skill_available,
+                                    declared_assertions=(
+                                        len(case.assertions)
+                                        if failure is not None and not assertions
+                                        else 0
+                                    ),
+                                    declared_checks=(
+                                        len(case.checks)
+                                        if failure is not None and not checks
+                                        else 0
+                                    ),
                                 ),
                             ),
                         )
