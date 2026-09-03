@@ -201,6 +201,11 @@ If you entered model settings during `init`, they are already in
 base_url = "https://provider.example/v1"
 model = "provider/model-name"
 api_key_env = "SKILLROLL_API_KEY"
+
+[inference.limits]
+max_turns = 12
+timeout_seconds = 180
+max_output_tokens = 8192
 ```
 
 ### OpenRouter
@@ -221,6 +226,11 @@ To use Luna Pro:
 base_url = "https://openrouter.ai/api/v1"
 model = "openai/gpt-5.6-luna-pro"
 api_key_env = "SKILLROLL_API_KEY"
+
+[inference.limits]
+max_turns = 12
+timeout_seconds = 180
+max_output_tokens = 8192
 ```
 
 Or the free tier:
@@ -230,7 +240,16 @@ Or the free tier:
 base_url = "https://openrouter.ai/api/v1"
 model = "openrouter/free"
 api_key_env = "SKILLROLL_API_KEY"
+
+[inference.limits]
+max_turns = 12
+timeout_seconds = 180
+max_output_tokens = 8192
 ```
+
+New inference configurations created by `skillroll init` write these limits
+explicitly. They give tool-using models room to finish while keeping every run
+bounded; lower them for small, focused cases when faster failures are useful.
 
 ### Estimated Luna Pro cost per eval
 

@@ -8,6 +8,11 @@ Dungeon Master, and judge the result.
 base_url = "https://provider.example/v1"
 model = "provider/model-name"
 api_key_env = "SKILLROLL_API_KEY"
+
+[inference.limits]
+max_turns = 12
+timeout_seconds = 180
+max_output_tokens = 8192
 ```
 
 The endpoint must provide an OpenAI-compatible Chat Completions API with tool
@@ -28,6 +33,12 @@ stable, useful results. A model-backed run can include calls for the skill,
 Dungeon Master actions, and the judge. Focused cases keep that work small
 enough for regular prompt development and CI.
 
+`skillroll init` writes the limits above explicitly when it creates an
+inference configuration. They bound model-backed work while configurations
+without a limits table continue to use the built-in defaults. Tune them
+downward for small cases, or override them in an eval's front matter when one
+case needs a different ceiling.
+
 Free or changing routes are useful for checking endpoint wiring. Do not use
 them to compare results over time because their model and capacity can change.
 
@@ -42,6 +53,11 @@ For ongoing evals, our current price/performance recommendation is
 base_url = "https://openrouter.ai/api/v1"
 model = "openai/gpt-5.6-luna-pro"
 api_key_env = "SKILLROLL_API_KEY"
+
+[inference.limits]
+max_turns = 12
+timeout_seconds = 180
+max_output_tokens = 8192
 ```
 
 `skillroll init --skills-path PATH --openrouter-free` configures OpenRouter's

@@ -221,6 +221,20 @@ def test_init_adds_generic_inference_without_accessing_a_key(tmp_path: Path) -> 
     content = (repository / "skillroll.toml").read_text(encoding="utf-8")
     assert DEFAULT_API_KEY_ENV in content
     assert "secret" not in content
+    assert (
+        """[inference.limits]
+max_turns = 12
+timeout_seconds = 180
+max_output_tokens = 8192
+"""
+        in content
+    )
+    configured = load_config(repository).value
+    assert configured is not None
+    assert configured.inference is not None
+    assert configured.inference.limits.max_turns == 12
+    assert configured.inference.limits.timeout_seconds == 180
+    assert configured.inference.limits.max_output_tokens == 8192
 
 
 def test_init_explicitly_adds_openrouter_free_without_accessing_a_key(

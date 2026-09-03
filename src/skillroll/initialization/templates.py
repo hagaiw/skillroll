@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 
+_INITIAL_MAX_TURNS = 12
+_INITIAL_TIMEOUT_SECONDS = 180
+_INITIAL_MAX_OUTPUT_TOKENS = 8192
+
 
 def _toml_string(value: str) -> str:
     """Encode a TOML basic string without letting data alter its structure."""
@@ -50,6 +54,11 @@ def render_config(
                 f"base_url = {_toml_string(base_url)}",
                 f"model = {_toml_string(model)}",
                 f"api_key_env = {_toml_string(api_key_env)}",
+                "",
+                "[inference.limits]",
+                f"max_turns = {_INITIAL_MAX_TURNS}",
+                f"timeout_seconds = {_INITIAL_TIMEOUT_SECONDS}",
+                f"max_output_tokens = {_INITIAL_MAX_OUTPUT_TOKENS}",
             ]
         )
     return ("\n".join(lines) + "\n").encode()
