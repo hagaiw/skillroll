@@ -56,7 +56,7 @@ def test_dogfood_skills_and_cases_validate_without_making_marketplace_required()
     assert report.config.inference.model == "openai/gpt-4.1-nano"
     assert not report.findings
     assert len(report.skills) == 13
-    assert len(report.cases) == 45
+    assert len(report.cases) == 46
 
 
 def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> None:

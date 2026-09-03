@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
@@ -42,7 +43,7 @@ from skillroll.inference.profile import (
     resolve_inference_candidates,
 )
 from skillroll.inference.transport import ChatTransport, ModelUsage
-from skillroll.judge import JudgeResult, judge
+from skillroll.judge import JudgeAttempt, JudgeFailure, JudgeResult, judge
 from skillroll.models import (
     EvalCase,
     InferenceLimits,
@@ -110,7 +111,7 @@ def _usage(values: tuple[ModelUsage, ...] | ModelUsage | None) -> object:
 
 
 def _usage_records(
-    values: tuple[ModelUsage, ...] | ModelUsage | None,
+    values: tuple[ModelUsage | None, ...] | ModelUsage | None,
     *,
     stage: str,
     requested_model: str,
@@ -125,10 +126,10 @@ def _usage_records(
             "stage": stage,
             "requested_model": requested_model,
             "served_model": served_model,
-            "input_tokens": item.input_tokens,
-            "output_tokens": item.output_tokens,
-            "total_tokens": item.total_tokens,
-            "cache_read_tokens": item.cache_read_tokens,
+            "input_tokens": None if item is None else item.input_tokens,
+            "output_tokens": None if item is None else item.output_tokens,
+            "total_tokens": None if item is None else item.total_tokens,
+            "cache_read_tokens": None if item is None else item.cache_read_tokens,
         }
         for item in items
     ]
@@ -171,11 +172,101 @@ def _world_usage(
     }
 
 
+def _judge_attempts(judged: JudgeResult) -> tuple[JudgeAttempt, ...]:
+    """Use explicit attempts when available, preserving legacy result objects."""
+    if judged.attempts:
+        return judged.attempts
+    if judged.model is None and judged.usage is None:
+        return ()
+    return (JudgeAttempt(None, judged.model, judged.usage, "unavailable"),)
+
+
+def _judge_usage_records(
+    attempts: tuple[JudgeAttempt, ...], requested_model: str
+) -> dict[str, object]:
+    """Render each judge attempt with its own served model and usage."""
+    calls: list[dict[str, object]] = []
+    for attempt in attempts:
+        usage = attempt.usage
+        calls.append(
+            {
+                "stage": "semantic_judgment",
+                "requested_model": requested_model,
+                "served_model": attempt.model,
+                "input_tokens": None if usage is None else usage.input_tokens,
+                "output_tokens": None if usage is None else usage.output_tokens,
+                "total_tokens": None if usage is None else usage.total_tokens,
+                "cache_read_tokens": (
+                    None if usage is None else usage.cache_read_tokens
+                ),
+            }
+        )
+    observed = bool(calls) and any(
+        value is not None
+        for call in calls
+        for value in (
+            call["input_tokens"],
+            call["output_tokens"],
+            call["total_tokens"],
+            call["cache_read_tokens"],
+        )
+    )
+    return {"status": "observed" if observed else "unavailable", "calls": calls}
+
+
+def _judge_attempts_for(
+    judged: JudgeResult | None, failure: InferenceFailure | None
+) -> tuple[JudgeAttempt, ...]:
+    if judged is not None:
+        return _judge_attempts(judged)
+    if isinstance(failure, JudgeFailure):
+        return failure.attempts
+    return ()
+
+
+def _judge_attempt_data(
+    attempt: JudgeAttempt, ordinal: int, requested_model: str
+) -> dict[str, object]:
+    raw = attempt.raw_response
+    response: dict[str, object] = {
+        "status": attempt.status,
+        "bytes": None,
+        "sha256": None,
+    }
+    if raw is not None:
+        encoded = raw.encode("utf-8")
+        response.update(
+            {
+                "bytes": len(encoded),
+                "sha256": hashlib.sha256(encoded).hexdigest(),
+            }
+        )
+    return {
+        "ordinal": ordinal,
+        "requested_model": requested_model,
+        "served_model": attempt.model,
+        "status": attempt.status,
+        "response_metadata": response,
+        "usage": _usage(attempt.usage),
+    }
+
+
+def _judge_attempts_data(
+    attempts: tuple[JudgeAttempt, ...],
+    requested_model: str,
+) -> list[dict[str, object]]:
+    return [
+        _judge_attempt_data(attempt, ordinal, requested_model)
+        for ordinal, attempt in enumerate(attempts, start=1)
+    ]
+
+
 def _judge_data(
     judged: JudgeResult | None, requested_model: str
 ) -> dict[str, object] | None:
     if judged is None:
         return None
+    attempts = _judge_attempts(judged)
     return {
         "verdict": judged.verdict,
         "rationale": judged.rationale,
@@ -189,12 +280,27 @@ def _judge_data(
             for item in judged.criteria
         ],
         "model": judged.model,
-        "usage": _usage_records(
-            judged.usage,
-            stage="semantic_judgment",
-            requested_model=requested_model,
-            served_model=judged.model,
-        ),
+        "usage": _judge_usage_records(attempts, requested_model),
+        "attempts": _judge_attempts_data(attempts, requested_model),
+    }
+
+
+def _judge_artifact_data(
+    judged: JudgeResult | None,
+    failure: InferenceFailure | None,
+    requested_model: str,
+) -> dict[str, object] | None:
+    """Keep safe judge-attempt evidence even when no decision was accepted."""
+    data = _judge_data(judged, requested_model)
+    if data is not None:
+        return data
+    attempts = _judge_attempts_for(judged, failure)
+    if not attempts:
+        return None
+    return {
+        "status": "not_run",
+        "usage": _judge_usage_records(attempts, requested_model),
+        "attempts": _judge_attempts_data(attempts, requested_model),
     }
 
 
@@ -382,16 +488,24 @@ def _result_summary(
         requested_model=requested_model,
     )
     world_usage = _world_usage(events, requested_model)
-    judge_usage: dict[str, object] = (
-        {"status": "unavailable", "calls": []}
-        if judged is None
-        else _usage_records(
-            judged.usage,
-            stage="semantic_judgment",
-            requested_model=requested_model,
-            served_model=judged.model,
+    judge_attempts = _judge_attempts_for(judged, failure)
+    judge_usage = _judge_usage_records(judge_attempts, requested_model)
+    semantic_judgment: dict[str, object] = {
+        "status": "accepted"
+        if judged is not None and judged.verdict == "PASS"
+        else "rejected"
+        if judged is not None and judged.verdict == "FAIL"
+        else "not_run",
+    }
+    if judge_data is not None:
+        semantic_judgment.update(judge_data)
+    elif judge_attempts:
+        semantic_judgment.update(
+            {
+                "usage": judge_usage,
+                "attempts": _judge_attempts_data(judge_attempts, requested_model),
+            }
         )
-    )
     execution_status = "completed" if execution_present else "not_completed"
     return {
         "skill": case.skill.identity.as_posix(),
@@ -418,14 +532,7 @@ def _result_summary(
             "usage": execution_usage,
             "world_usage": world_usage,
         },
-        "semantic_judgment": {
-            "status": "accepted"
-            if judged is not None and judged.verdict == "PASS"
-            else "rejected"
-            if judged is not None and judged.verdict == "FAIL"
-            else "not_run",
-            **({} if judge_data is None else judge_data),
-        },
+        "semantic_judgment": semantic_judgment,
         "exact_fact_checks": {
             "status": _fact_status(assertions),
             "items": _assertions(assertions),
@@ -658,7 +765,9 @@ async def evaluate_repository(
                             (
                                 "judge.json",
                                 judge_bytes(
-                                    _judge_data(judged, profile.model),
+                                    _judge_artifact_data(
+                                        judged, failure, profile.model
+                                    ),
                                     _assertions(assertions),
                                 ),
                             ),
@@ -879,11 +988,9 @@ def _experiment_usage(
                 requested_model=requested_model,
             ),
             _world_usage(item.events, requested_model),
-            _usage_records(
-                None if item.judge is None else item.judge.usage,
-                stage="semantic_judgment",
-                requested_model=requested_model,
-                served_model=None if item.judge is None else item.judge.model,
+            _judge_usage_records(
+                _judge_attempts_for(item.judge, item.failure),
+                requested_model,
             ),
         )
         for section in sections:

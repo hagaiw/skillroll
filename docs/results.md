@@ -47,6 +47,18 @@ Start with the report, then inspect the transcript:
 Exact assertions inspect final-response text. The judge uses the final response
 and completed action transcript to check the meaning of each success criterion.
 
+If the judge returns one of the three supported internal contradictions—a
+`PASS` with a non-`met` criterion, a `FAIL` with no `not_met` or `unclear`
+criterion, or a verdict that disagrees with `unmet_criteria`—SkillRoll makes at
+most one same-model, same-schema repair request using the same evidence. The
+original response remains untrusted; a malformed, incomplete, or still
+inconsistent repair is an `ERROR`, not a skill `PASS` or `FAIL`. `judge.json`
+and `result.json` retain safe metadata for every completed attempt (ordinal,
+requested and served model, status, bounded response size/hash, and per-attempt
+provider usage) without storing raw responses or prompts. A raw response above
+the 256 KiB repair bound is recorded as an error without a repair request. Other
+malformed or transport responses are not retried.
+
 `max_turns` counts model turns. Leave enough turns for a final response after
 the skill's actions. `max_output_tokens` applies to the skill run, Dungeon
 Master, and judge. If the judge reaches that limit, the outcome is `ERROR`, not

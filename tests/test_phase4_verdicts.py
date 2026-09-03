@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import shlex
@@ -53,6 +54,7 @@ from skillroll.inference.transport import (
 )
 from skillroll.judge import (
     MAX_JUDGE_BYTES,
+    JudgeFailure,
     JudgeResult,
     _parse,
     criteria_items,
@@ -581,6 +583,189 @@ def test_judge_renders_only_observed_evidence_and_calls_once(tmp_path: Path) -> 
     assert len(transport.requests) == 1
 
 
+def _judge_json(
+    verdict: str,
+    status: str,
+    unmet: list[str],
+    *,
+    rationale: str = "The observed evidence supports this decision.",
+    evidence: str = "The final response and transcript support this criterion.",
+) -> str:
+    return json.dumps(
+        {
+            "verdict": verdict,
+            "rationale": rationale,
+            "criteria": [{"status": status, "evidence": evidence}],
+            "unmet_criteria": unmet,
+        },
+        separators=(",", ":"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("original", "repaired_verdict", "repaired_status", "repaired_unmet"),
+    [
+        (_judge_json("PASS", "not_met", ["success"]), "FAIL", "not_met", ["success"]),
+        (_judge_json("FAIL", "met", ["success"]), "PASS", "met", []),
+        (_judge_json("PASS", "met", ["success"]), "PASS", "met", []),
+    ],
+)
+def test_judge_repairs_only_the_three_supported_contradictions(
+    tmp_path: Path,
+    original: str,
+    repaired_verdict: str,
+    repaired_status: str,
+    repaired_unmet: list[str],
+) -> None:
+    case = case_at(tmp_path)
+    repaired = _judge_json(repaired_verdict, repaired_status, repaired_unmet)
+    transport = ScriptedTransport(
+        [
+            ChatResponse(original, (), "served/original", ModelUsage(2, 3, 5)),
+            ChatResponse(repaired, (), "served/repair", ModelUsage(7, 11, 18)),
+        ]
+    )
+
+    result, failure = asyncio.run(
+        judge(profile(), transport, case, ExecutionResult("x", 1, (), ()), ())
+    )
+
+    assert failure is None and result is not None
+    assert result.verdict == repaired_verdict
+    assert len(transport.requests) == 2
+    first, second = transport.requests
+    assert second.model == first.model == profile().model
+    assert second.tools == first.tools == ()
+    assert second.force_tool is first.force_tool is None
+    assert second.response_format == first.response_format
+    assert second.messages[:2] == first.messages
+    repair_prompt = second.messages[-1].content or ""
+    assert original in repair_prompt
+    assert "untrusted data" in repair_prompt
+    assert "same supplied evidence" in repair_prompt
+    assert len(result.attempts) == 2
+    assert result.attempts[0].raw_response == original
+    assert result.attempts[1].raw_response == repaired
+
+
+@pytest.mark.parametrize(
+    ("response", "accepted"),
+    [
+        (
+            ChatResponse(
+                _judge_json("PASS", "met", []), (), "served", ModelUsage(1, 1, 2)
+            ),
+            True,
+        ),
+        (ChatResponse("not json", (), "served", ModelUsage(1, 1, 2)), False),
+        (
+            ChatResponse(
+                _judge_json("PASS", "met", [])[:-1] + ',"extra":1}',
+                (),
+                "served",
+                None,
+            ),
+            False,
+        ),
+        (
+            ChatResponse(
+                _judge_json("PASS", "met", []).replace(
+                    '"status":"met"', '"status":"bad"'
+                ),
+                (),
+                "served",
+                None,
+            ),
+            False,
+        ),
+        (ChatResponse("{", (), "served", None, None, "length"), False),
+    ],
+)
+def test_judge_does_not_retry_non_triggering_or_general_failures(
+    tmp_path: Path, response: ChatResponse, accepted: bool
+) -> None:
+    transport = Transport(response)
+    result, failure = asyncio.run(
+        judge(
+            profile(), transport, case_at(tmp_path), ExecutionResult("x", 1, (), ()), ()
+        )
+    )
+
+    assert (result is not None) is accepted
+    assert (failure is None) is accepted
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "repair_response",
+    [
+        ChatResponse("not json", (), "served/repair", ModelUsage(4, 5, 9)),
+        ChatResponse(
+            _judge_json("PASS", "met", ["success"]),
+            (),
+            "served/repair",
+            ModelUsage(4, 5, 9),
+        ),
+        ChatResponse("{", (), "served/repair", None, None, "length"),
+    ],
+)
+def test_judge_makes_at_most_one_repair_and_failed_repair_is_error(
+    tmp_path: Path, repair_response: ChatResponse
+) -> None:
+    original = _judge_json("PASS", "met", ["success"])
+    transport = ScriptedTransport(
+        [
+            ChatResponse(original, (), "served/original", ModelUsage(2, 3, 5)),
+            repair_response,
+        ]
+    )
+
+    result, failure = asyncio.run(
+        judge(
+            profile(), transport, case_at(tmp_path), ExecutionResult("x", 1, (), ()), ()
+        )
+    )
+
+    assert result is None
+    assert isinstance(failure, JudgeFailure)
+    assert len(transport.requests) == 2
+    assert len(failure.attempts) == 2
+    assert "repair attempt failed" in failure.summary
+
+
+def test_judge_records_a_failed_repair_transport_call_without_fake_response_data(
+    tmp_path: Path,
+) -> None:
+    original = _judge_json("PASS", "met", ["success"])
+    expected = InferenceFailure(InferenceFailureKind.TIMEOUT, "repair timed out")
+
+    class RepairTimeoutTransport(ScriptedTransport):
+        async def complete(self, request: ChatRequest) -> ChatResponse:
+            self.requests.append(request)
+            if len(self.requests) == 2:
+                raise TransportFailure(expected)
+            return self.values.pop(0)
+
+    transport = RepairTimeoutTransport(
+        [ChatResponse(original, (), "served/original", ModelUsage(2, 3, 5))]
+    )
+    result, failure = asyncio.run(
+        judge(
+            profile(), transport, case_at(tmp_path), ExecutionResult("x", 1, (), ()), ()
+        )
+    )
+
+    assert result is None
+    assert isinstance(failure, JudgeFailure)
+    assert failure.kind is InferenceFailureKind.TIMEOUT
+    assert len(transport.requests) == 2
+    assert len(failure.attempts) == 2
+    assert failure.attempts[1].status == "failed"
+    assert failure.attempts[1].raw_response is None
+    assert failure.attempts[1].model is None
+    assert failure.attempts[1].usage is None
+
+
 def test_judge_parses_criterion_level_evidence_and_control_uses_same_judge_evidence(
     tmp_path: Path,
 ) -> None:
@@ -726,6 +911,116 @@ def test_judge_reports_length_finish_reason_before_parsing(tmp_path: Path) -> No
     assert any("1 criterion" in detail for detail in failure.details)
     assert "suggested diagnostic max_output_tokens: 16384" in failure.details
     assert any("skill and Dungeon Master" in detail for detail in failure.details)
+
+
+@pytest.mark.parametrize(
+    ("response", "status"),
+    [
+        (
+            ChatResponse(
+                "partial",
+                (),
+                "served/judge",
+                ModelUsage(5, 6, 11),
+                None,
+                "length",
+            ),
+            "truncated",
+        ),
+        (
+            ChatResponse("not json", (), "served/judge", ModelUsage(5, 6, 11)),
+            "received",
+        ),
+        (
+            ChatResponse(
+                "PASS",
+                (ToolCall("id", "unexpected", {}),),
+                "served/judge",
+                ModelUsage(5, 6, 11),
+            ),
+            "received",
+        ),
+    ],
+)
+def test_judge_failure_retains_completed_initial_response_metadata(
+    tmp_path: Path, response: ChatResponse, status: str
+) -> None:
+    result, failure = asyncio.run(
+        judge(
+            profile(),
+            Transport(response),
+            case_at(tmp_path),
+            ExecutionResult("x", 1, (), ()),
+            (),
+        )
+    )
+
+    assert result is None
+    assert isinstance(failure, JudgeFailure)
+    assert len(failure.attempts) == 1
+    attempt = failure.attempts[0]
+    assert attempt.status == status
+    assert attempt.model == "served/judge"
+    assert attempt.usage == ModelUsage(5, 6, 11)
+    assert attempt.raw_response == response.content
+    artifact = evaluate._judge_artifact_data(None, failure, "tiny")
+    assert artifact is not None
+    metadata = artifact["attempts"][0]
+    assert metadata["requested_model"] == "tiny"
+    assert metadata["served_model"] == "served/judge"
+    assert metadata["status"] == status
+    assert metadata["response_metadata"]["bytes"] == len(
+        (response.content or "").encode("utf-8")
+    )
+    assert (
+        metadata["response_metadata"]["sha256"]
+        == hashlib.sha256((response.content or "").encode("utf-8")).hexdigest()
+    )
+    assert metadata["usage"] == {
+        "input_tokens": 5,
+        "output_tokens": 6,
+        "total_tokens": 11,
+        "cache_read_tokens": None,
+    }
+    assert response.content not in json.dumps(artifact)
+
+
+def test_judge_does_not_repair_an_oversized_contradictory_response(
+    tmp_path: Path,
+) -> None:
+    oversized = _judge_json(
+        "PASS",
+        "met",
+        ["success"],
+        rationale="x" * MAX_JUDGE_BYTES,
+    )
+    response = ChatResponse(
+        oversized,
+        (),
+        "served/judge",
+        ModelUsage(5, 6, 11),
+    )
+    transport = Transport(response)
+    result, failure = asyncio.run(
+        judge(
+            profile(), transport, case_at(tmp_path), ExecutionResult("x", 1, (), ()), ()
+        )
+    )
+
+    assert result is None
+    assert isinstance(failure, JudgeFailure)
+    assert len(transport.requests) == 1
+    assert len(failure.attempts) == 1
+    artifact = evaluate._judge_artifact_data(None, failure, "tiny")
+    assert artifact is not None
+    metadata = artifact["attempts"][0]
+    assert metadata["status"] == "received"
+    assert metadata["response_metadata"]["bytes"] == len(oversized.encode("utf-8"))
+    assert (
+        metadata["response_metadata"]["sha256"]
+        == hashlib.sha256(oversized.encode("utf-8")).hexdigest()
+    )
+    assert oversized not in json.dumps(artifact)
 
 
 def test_judge_output_estimate_scales_with_case_complexity() -> None:
@@ -1512,6 +1807,146 @@ def test_evaluate_repository_runs_one_preflight_execution_judge_and_check(
     assert '"semantic_judgment"' in result_text
     assert "preliminary" not in (directory / "report.md").read_text(encoding="utf-8")
     assert transport.closed
+
+
+def test_evaluate_persists_safe_metadata_for_both_judge_attempts(
+    tmp_path: Path,
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings(
+            "https://example.test/v1", "tiny", "KEY", InferenceLimits(2, 10, 256)
+        ),
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+    original = _judge_json("PASS", "met", ["success"])
+    repaired = _judge_json("PASS", "met", [])
+    transport = ScriptedTransport(
+        preflight_responses()[:3]
+        + [
+            ChatResponse(original, (), "served/original", ModelUsage(2, 3, 5)),
+            ChatResponse(repaired, (), "served/repair", ModelUsage(7, 11, 18)),
+        ]
+    )
+
+    result = asyncio.run(
+        evaluate.evaluate_repository(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            transport_factory=lambda _: transport,
+            executor_factory=lambda _: Executor(),
+        )
+    )
+
+    assert not isinstance(result, InferenceFailure)
+    assert result[0].outcome == "PASS"
+    assert len(transport.requests) == 5
+    directory = tmp_path / result[0].artifact_directory
+    judge_text = (directory / "judge.json").read_text(encoding="utf-8")
+    result_text = (directory / "result.json").read_text(encoding="utf-8")
+    assert original not in judge_text + result_text
+    assert repaired not in judge_text + result_text
+    assert "Input:" not in judge_text + result_text
+    for artifact in (json.loads(judge_text), json.loads(result_text)):
+        semantic = artifact["semantic_judgment"]
+        attempts = semantic["attempts"]
+        assert [item["ordinal"] for item in attempts] == [1, 2]
+        assert [item["requested_model"] for item in attempts] == ["tiny", "tiny"]
+        assert [item["served_model"] for item in attempts] == [
+            "served/original",
+            "served/repair",
+        ]
+        assert [item["status"] for item in attempts] == ["received", "received"]
+        assert attempts[0]["response_metadata"]["bytes"] == len(
+            original.encode("utf-8")
+        )
+        assert (
+            attempts[0]["response_metadata"]["sha256"]
+            == hashlib.sha256(original.encode("utf-8")).hexdigest()
+        )
+        assert attempts[1]["response_metadata"]["bytes"] == len(
+            repaired.encode("utf-8")
+        )
+        assert attempts[0]["usage"] == {
+            "input_tokens": 2,
+            "output_tokens": 3,
+            "total_tokens": 5,
+            "cache_read_tokens": None,
+        }
+        assert attempts[1]["usage"] == {
+            "input_tokens": 7,
+            "output_tokens": 11,
+            "total_tokens": 18,
+            "cache_read_tokens": None,
+        }
+
+
+def test_evaluate_persists_failed_repair_without_fake_response_metadata(
+    tmp_path: Path,
+) -> None:
+    case = case_at(tmp_path)
+    config = SkillRollConfig(
+        tmp_path,
+        PurePosixPath("skills"),
+        tmp_path / "skills",
+        GuardSettings(),
+        InferenceSettings(
+            "https://example.test/v1", "tiny", "KEY", InferenceLimits(2, 10, 256)
+        ),
+        tmp_path / "skillroll.toml",
+    )
+    config.config_path.write_text("schema_version = 1", encoding="utf-8")
+    original = _judge_json("PASS", "met", ["success"])
+    timeout = InferenceFailure(InferenceFailureKind.TIMEOUT, "repair timed out")
+
+    class RepairTimeoutTransport(ScriptedTransport):
+        async def complete(self, request: ChatRequest) -> ChatResponse:
+            self.requests.append(request)
+            if len(self.requests) == 5:
+                raise TransportFailure(timeout)
+            return self.values.pop(0)
+
+    transport = RepairTimeoutTransport(
+        preflight_responses()[:3]
+        + [ChatResponse(original, (), "served/original", ModelUsage(2, 3, 5))]
+    )
+    result = asyncio.run(
+        evaluate.evaluate_repository(
+            config,
+            (case,),
+            environment={"KEY": "secret"},
+            run_commands=False,
+            transport_factory=lambda _: transport,
+            executor_factory=lambda _: Executor(),
+        )
+    )
+
+    assert not isinstance(result, InferenceFailure)
+    assert result[0].outcome == "ERROR"
+    assert isinstance(result[0].failure, JudgeFailure)
+    directory = tmp_path / result[0].artifact_directory
+    judge_artifact = json.loads((directory / "judge.json").read_text(encoding="utf-8"))
+    result_artifact = json.loads(
+        (directory / "result.json").read_text(encoding="utf-8")
+    )
+    for artifact in (judge_artifact, result_artifact):
+        attempts = artifact["semantic_judgment"]["attempts"]
+        assert len(attempts) == 2
+        failed = attempts[1]
+        assert failed["ordinal"] == 2
+        assert failed["requested_model"] == "tiny"
+        assert failed["served_model"] is None
+        assert failed["status"] == "failed"
+        assert failed["response_metadata"]["bytes"] is None
+        assert failed["response_metadata"]["sha256"] is None
+        assert failed["usage"] is None
 
 
 def test_authoring_experiment_pairs_skill_and_omission_runs(tmp_path: Path) -> None:
