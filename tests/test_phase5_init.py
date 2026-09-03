@@ -133,6 +133,18 @@ def test_root_skills_path_is_a_narrow_valid_config_value(tmp_path: Path) -> None
     assert load_config(tmp_path).value is not None
 
 
+def test_init_discovers_skills_in_explicit_hidden_root(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    make_skill(repository, ".codex/skills/review")
+
+    result = run(repo=str(repository), skills_path=".codex/skills")
+
+    assert result.outcome is Outcome.PASS
+    configured = load_config(repository).value
+    assert configured is not None
+    assert configured.skills_path == PurePosixPath(".codex/skills")
+
+
 def test_init_creates_minimal_local_files_and_templates(tmp_path: Path) -> None:
     repository = tmp_path / "a repo with spaces"
     skill = make_skill(repository)

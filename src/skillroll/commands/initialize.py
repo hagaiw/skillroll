@@ -322,7 +322,7 @@ def run(
         return _error(
             str(error), "Choose a narrower --skills-path and run skillroll init again."
         )
-    if not found:
+    if not found and options.skills_path is None:
         return _error(
             "SkillRoll did not find any SKILL.md files in this repository.",
             "Add a skill folder with SKILL.md, or select the correct "
