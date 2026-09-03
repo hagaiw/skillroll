@@ -11,8 +11,8 @@ Markdown case.
 
 Then follow the part of the loop you need:
 
-1. [Write an eval](writing-evals.md): describe one behavior and the World around
-   it.
+1. [Write or improve an eval](writing-evals.md): describe one behavior and the
+   World around it, then keep a supported prompt fix covered.
 2. [Configure a model](configuration.md): connect an endpoint and understand
    cost.
 3. [Read a result](results.md): inspect the evidence, fix the prompt, and rerun.

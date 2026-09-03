@@ -19,7 +19,7 @@ EXPECTED_PLUGINS = {
         "produce-review",
     ),
     "pr-overview": ("pr-overview",),
-    "skillroll-authoring": ("skillroll-setup", "eval-author"),
+    "skillroll-authoring": ("skillroll-setup", "eval-author", "skill-improver"),
     "fact-check": ("fact-check",),
     "harness-prompts": (
         "executor-prompt",
@@ -27,6 +27,15 @@ EXPECTED_PLUGINS = {
         "semantic-judge-prompt",
     ),
 }
+
+REQUIRED_REFERENCES = {
+    (plugin, skill): "references/context.md"
+    for plugin, skills in EXPECTED_PLUGINS.items()
+    for skill in skills
+}
+REQUIRED_REFERENCES[("skillroll-authoring", "skill-improver")] = (
+    "references/decision-map.md"
+)
 
 
 def test_dogfood_marketplace_has_the_exact_plugin_and_skill_inventory() -> None:
@@ -55,11 +64,11 @@ def test_dogfood_skills_and_cases_validate_without_making_marketplace_required()
     assert report.config.inference is not None
     assert report.config.inference.model == "openai/gpt-4.1-nano"
     assert not report.findings
-    assert len(report.skills) == 13
-    assert len(report.cases) == 45
+    assert len(report.skills) == 14
+    assert len(report.cases) == 48
 
 
-def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> None:
+def test_agentic_skills_link_required_references_without_review_leakage() -> None:
     runner = (
         (ROOT / "plugins/flow-runner/skills/flow-runner/SKILL.md")
         .read_text(encoding="utf-8")
@@ -74,8 +83,9 @@ def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> Non
             path = ROOT / "plugins" / plugin / "skills" / skill / "SKILL.md"
             content = path.read_text(encoding="utf-8")
             assert content.startswith("---\nname: ")
-            assert "references/context.md" in content
-            assert (path.parent / "references/context.md").is_file()
+            reference = REQUIRED_REFERENCES[(plugin, skill)]
+            assert reference in content
+            assert (path.parent / reference).is_file()
 
 
 def test_setup_skill_gives_weaker_models_a_direct_first_use_path() -> None:
@@ -98,4 +108,4 @@ def test_dogfood_declared_renderer_check_runs_when_explicitly_permitted() -> Non
     result = validate.run(repo=str(ROOT), run_commands=True)
 
     assert result.outcome is Outcome.PASS
-    assert result.summary == "Validated 13 skills and ran 3 repository checks."
+    assert result.summary == "Validated 14 skills and ran 3 repository checks."

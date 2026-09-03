@@ -78,6 +78,15 @@ Turn a prompt failure into a case before fixing it:
 5. Fix the skill and run the case again.
 6. Keep the case to catch the regression in future changes.
 
+For a structured improvement to an existing skill, the `skill-improver` skill
+in the `skillroll-authoring` plugin follows the same loop. It first separates
+missing context and deterministic software defects from decisions the agent
+actually owns. It then adds a realistic World-backed case for one uncovered
+decision, validates it, and—when live inference is authorized—checks the
+transcript before proposing a prompt change. A supported fix is rerun against
+the unchanged case and nearby cases. This keeps a useful regression test
+without treating missing information or a broken parser as a prompt bug.
+
 Validate the evals below your current directory before spending model calls,
 then run the case and read the report:
 

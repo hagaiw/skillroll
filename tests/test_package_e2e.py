@@ -373,5 +373,5 @@ def test_installed_wheel_validates_the_dogfood_marketplace_without_source_import
 
     assert completed.returncode == 0
     assert json.loads(completed.stdout)["summary"] == (
-        "Validated 13 skills and ran 3 repository checks."
+        "Validated 14 skills and ran 3 repository checks."
     )
