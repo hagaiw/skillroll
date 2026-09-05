@@ -23,6 +23,14 @@ inputs:
     description: Run repository checks after reviewing and trusting them
     required: false
     default: "false"
+  samples:
+    description: Independent model-backed samples to run (1-10)
+    required: false
+    default: "1"
+  with-skill-control:
+    description: Also run samples without the selected skill for comparison
+    required: false
+    default: "false"
   command-notice:
     description: Explain when repository checks are intentionally not run
     required: false
@@ -69,6 +77,8 @@ runs:
         SKILLROLL_SELECTION_PATH: ${{ inputs.selection-path }}
         SKILLROLL_REVIEWED_REF: ${{ inputs.reviewed-ref }}
         SKILLROLL_RUN_COMMANDS: ${{ inputs.run-commands }}
+        SKILLROLL_SAMPLES: ${{ inputs.samples }}
+        SKILLROLL_WITH_SKILL_CONTROL: ${{ inputs.with-skill-control }}
         SKILLROLL_COMMAND_NOTICE: ${{ inputs.command-notice }}
         SKILLROLL_UPLOAD_ARTIFACT: ${{ inputs.upload-artifact }}
         SKILLROLL_RETENTION_DAYS: ${{ inputs.artifact-retention-days }}
@@ -83,6 +93,8 @@ runs:
           --selection-path "$SKILLROLL_SELECTION_PATH" \
           --reviewed-ref "$SKILLROLL_REVIEWED_REF" \
           --run-commands "$SKILLROLL_RUN_COMMANDS" \
+          --samples "$SKILLROLL_SAMPLES" \
+          --with-skill-control "$SKILLROLL_WITH_SKILL_CONTROL" \
           --command-notice "$SKILLROLL_COMMAND_NOTICE" \
           --upload-artifact "$SKILLROLL_UPLOAD_ARTIFACT" \
           --artifact-retention-days "$SKILLROLL_RETENTION_DAYS" \
@@ -94,7 +106,9 @@ runs:
       uses: actions/upload-artifact@v7
       with:
         name: skillroll-evidence-${{ github.run_id }}-${{ github.job }}
-        path: .skillroll/runs/
+        path: |
+          .skillroll/runs/
+          .skillroll/experiments/
         if-no-files-found: ignore
         retention-days: ${{ inputs.artifact-retention-days }}
     - if: always()

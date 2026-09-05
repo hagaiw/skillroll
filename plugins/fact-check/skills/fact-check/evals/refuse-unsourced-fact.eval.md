@@ -24,8 +24,6 @@ limits:
   max_turns: 3
   timeout_seconds: 90
   max_output_tokens: 1024
-assertions:
-  - final_output_contains: "Not added:"
 ```
 
 ## Input

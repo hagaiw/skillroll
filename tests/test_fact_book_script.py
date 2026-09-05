@@ -115,6 +115,9 @@ def test_init_is_atomic_and_preserves_existing_book(tmp_path: Path) -> None:
         check=False,
     )
     original = target.read_text(encoding="utf-8")
+    assert "- Scope: test scope" in original
+    assert "- Started: 2026-08-18" in original
+    assert "- Last updated: 2026-08-18" in original
     second = subprocess.run(
         [
             sys.executable,

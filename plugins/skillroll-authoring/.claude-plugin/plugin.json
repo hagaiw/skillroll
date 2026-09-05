@@ -1,6 +1,6 @@
 {
   "name": "skillroll-authoring",
   "author": {"name": "SkillRoll"},
-  "description": "Set up SkillRoll and write Markdown behavior cases for regression tests and prompt TDD.",
+  "description": "Set up SkillRoll and author or audit Agent Skills and Markdown behavior cases.",
   "version": "0.1.2"
 }

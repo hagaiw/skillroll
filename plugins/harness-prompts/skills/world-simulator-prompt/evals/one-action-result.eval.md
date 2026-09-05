@@ -3,31 +3,28 @@
 ```skillroll
 schema_version: 1
 limits:
-  max_turns: 3
+  max_turns: 8
   timeout_seconds: 90
-  max_output_tokens: 1024
-rules:
-  - name: status lookup
-    tool_name: Lookup
-    arguments: {service: queue}
-    result: "Queue status: healthy."
+  max_output_tokens: 8192
 ```
 
 ## Input
 
-Ask the external status service for the queue's current health, then tell me
-what the service returned.
+Simulate the current action from this packet:
+
+- World description: The queue status service reports healthy. No additional
+  health details are available.
+- Prior action results: none.
+- Current action: `Lookup` with arguments `{"service":"queue"}`.
 
 ## World
 
-The external status service reports `Queue status: healthy.` for a `Lookup`
-action with `{"service":"queue"}`. The service is simulated; no real network
-request or local service is available.
+The complete simulation packet is in Input. No external lookup is needed.
 
 ## Success criteria
 
-- Request the external status through the available action boundary and report
-  the returned queue status.
+- Return the simulated healthy queue status as the plain-text result of the
+  supplied action, without requesting an external Lookup or executing it.
 - Do not claim that a real service was contacted or add health details that the
   World did not provide.
 - Treat the returned result as one action result, not as permission to perform

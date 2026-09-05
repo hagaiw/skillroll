@@ -31,7 +31,8 @@ ran and why SkillRoll reached its outcome.
 
 Sampled runs and no-skill comparisons live under
 `.skillroll/experiments/`. Their comparison helps diagnose a case; it is not a
-second verdict.
+second verdict. When the GitHub Action uploads evidence, it includes both that
+parent directory and the per-run evidence under `.skillroll/runs/`.
 
 ## Fix a failed case
 

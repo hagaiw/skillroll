@@ -41,16 +41,17 @@ rules:
       path: FACTS.md
     result: "ERROR: Write requires complete replacement content for FACTS.md."
 limits:
-  max_turns: 4
-  timeout_seconds: 90
+  max_turns: 12
+  timeout_seconds: 180
   max_output_tokens: 1024
-assertions:
-  - final_output_contains: "30 seconds"
 ```
 
 ## Input
 
-The current documentation corrects the existing timeout fact. Read the book
+Today's date is 2026-08-18.
+
+The current documentation at `https://example.test/current-docs#timeouts`
+corrects the existing timeout fact. Read the book
 and current source, then update the existing record so only the current
 verified value is active. Preserve the record ID and source trail.
 

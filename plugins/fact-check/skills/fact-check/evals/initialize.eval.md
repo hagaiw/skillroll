@@ -9,9 +9,9 @@ rules:
       command: python3 scripts/fact_book.py init FACTS.md --scope "investigate intermittent API timeouts"
     result: "Initialized FACTS.md for scope: investigate intermittent API timeouts."
 limits:
-  max_turns: 4
+  max_turns: 12
   timeout_seconds: 90
-  max_output_tokens: 1024
+  max_output_tokens: 8192
 assertions:
   - final_output_contains: "FACTS.md"
 checks:
@@ -20,6 +20,9 @@ checks:
     covers:
       - scripts/fact_book.py
 ```
+
+The helper's generated metadata is covered by deterministic tests; this case
+tests the initialization decision and explanation, not the real file format.
 
 ## Input
 
@@ -36,6 +39,6 @@ are available through the agent's normal tools and are simulated by SkillRoll.
 ## Success criteria
 
 - Create or initialize one scoped `FACTS.md` without inventing a fact.
-- Include session scope and date metadata, and explain that only verified facts
-  with sources will be written there.
+- Explain that the book will hold verified, source-backed facts rather than
+  guesses.
 - Do not overwrite an existing file or create a deterministic search index.

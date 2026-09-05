@@ -154,7 +154,7 @@ def test_init_creates_minimal_local_files_and_templates(tmp_path: Path) -> None:
     )
     assert (repository / ".gitignore").read_text(
         encoding="utf-8"
-    ) == ".skillroll/runs/\n"
+    ) == ".skillroll/runs/\n.skillroll/experiments/\n"
     starter = (skill / "evals" / "first-use.eval.md").read_text(encoding="utf-8")
     assert "Write the request or task that triggers the skill" in starter
     assert "Dungeon Master" in starter
@@ -172,6 +172,46 @@ def test_init_is_idempotent_and_never_replaces_configuration(tmp_path: Path) -> 
     assert repeat.outcome is Outcome.PASS
     assert repeat.data["changed_paths"] == ()
     assert (repository / "skillroll.toml").read_bytes() == before
+
+
+def test_init_upgrades_existing_artifact_ignore_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    make_skill(repository)
+    (repository / "skillroll.toml").write_text(
+        'schema_version = 1\nskills_path = "skills"\n', encoding="utf-8"
+    )
+    (repository / ".gitignore").write_text(".skillroll/runs/\n", encoding="utf-8")
+
+    result = run(repo=str(repository))
+
+    assert result.outcome is Outcome.PASS
+    assert result.data["changed_paths"] == (".gitignore",)
+    assert (repository / ".gitignore").read_text(encoding="utf-8") == (
+        ".skillroll/runs/\n.skillroll/experiments/\n"
+    )
+    unreadable = tmp_path / "unreadable"
+    make_skill(unreadable)
+    (unreadable / "skillroll.toml").write_text(
+        'schema_version = 1\nskills_path = "skills"\n', encoding="utf-8"
+    )
+    (unreadable / ".gitignore").mkdir()
+    assert run(repo=str(unreadable)).outcome is Outcome.ERROR
+
+    failed = tmp_path / "failed"
+    make_skill(failed)
+    (failed / "skillroll.toml").write_text(
+        'schema_version = 1\nskills_path = "skills"\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        initialize,
+        "commit",
+        lambda _, **__: (_ for _ in ()).throw(
+            transaction.TransactionError("disk full")
+        ),
+    )
+    assert run(repo=str(failed)).outcome is Outcome.ERROR
 
 
 def test_init_requires_explicit_noninteractive_choice_and_yes_uses_default(
@@ -292,8 +332,18 @@ def test_templates_and_suggestion_are_stable_and_portable() -> None:
     assert (
         render_config(PurePosixPath(".")) == b'schema_version = 1\nskills_path = "."\n'
     )
-    assert render_ignore("# local\r\n") == b"# local\r\n.skillroll/runs/\r\n"
-    assert render_ignore(".skillroll/runs/\n") == b".skillroll/runs/\n"
+    assert render_ignore("# local\r\n") == (
+        b"# local\r\n.skillroll/runs/\r\n.skillroll/experiments/\r\n"
+    )
+    assert render_ignore(".skillroll/runs/\n") == (
+        b".skillroll/runs/\n.skillroll/experiments/\n"
+    )
+    assert render_ignore(".skillroll/experiments/\n") == (
+        b".skillroll/experiments/\n.skillroll/runs/\n"
+    )
+    assert render_ignore(".skillroll/runs/\n.skillroll/experiments/\n") == (
+        b".skillroll/runs/\n.skillroll/experiments/\n"
+    )
     assert b"Success criteria" in render_starter_case("edge-case")
 
 
@@ -677,7 +727,15 @@ def test_init_handles_existing_ignore_rule_and_evals_link(tmp_path: Path) -> Non
     assert run(repo=str(repository), skills_path="skills").outcome is Outcome.PASS
     assert (repository / ".gitignore").read_text(
         encoding="utf-8"
-    ) == ".skillroll/runs/\n"
+    ) == ".skillroll/runs/\n.skillroll/experiments/\n"
+    repository_complete = tmp_path / "repository-complete"
+    make_skill(repository_complete)
+    complete_ignore = ".skillroll/runs/\n.skillroll/experiments/\n"
+    (repository_complete / ".gitignore").write_text(complete_ignore, encoding="utf-8")
+    assert (
+        run(repo=str(repository_complete), skills_path="skills").outcome is Outcome.PASS
+    )
+    assert (repository_complete / ".gitignore").read_text() == complete_ignore
     repository_two = tmp_path / "repository-two"
     linked_skill = make_skill(repository_two)
     destination = repository_two / "real-evals"

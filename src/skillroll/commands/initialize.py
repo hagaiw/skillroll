@@ -259,6 +259,19 @@ def run(
     if config_path.exists():
         parsed = load_config(root)
         if parsed.value is not None:
+            ignore_text, ignore_error = _read_ignore(root / ".gitignore")
+            if ignore_error is not None:
+                return ignore_error
+            rendered_ignore = render_ignore(ignore_text)
+            ignore_writes: tuple[PlannedWrite, ...] = ()
+            if ignore_text is None or rendered_ignore != ignore_text.encode():
+                ignore_writes = (
+                    PlannedWrite(
+                        root / ".gitignore",
+                        rendered_ignore,
+                        replace=ignore_text is not None,
+                    ),
+                )
             if options.github_workflow:
                 selected_ref = (
                     DEFAULT_ACTION_REF
@@ -275,7 +288,8 @@ def run(
                 workflow = root / ".github" / "workflows" / "skillroll.yml"
                 try:
                     result = commit(
-                        (
+                        ignore_writes
+                        + (
                             PlannedWrite(
                                 workflow,
                                 render_workflow(
@@ -304,6 +318,24 @@ def run(
                             _relative(root, path) for path in result.changed
                         ),
                         "action_ref": selected_ref,
+                    },
+                )
+            if ignore_writes:
+                try:
+                    result = commit(ignore_writes, root=root)
+                except TransactionError as error:
+                    return _error(
+                        str(error),
+                        "Review .gitignore, then run skillroll init again.",
+                    )
+                return CommandResult(
+                    Outcome.PASS,
+                    "Updated .gitignore for private SkillRoll artifacts.",
+                    data={
+                        "repository_root": ".",
+                        "changed_paths": tuple(
+                            _relative(root, path) for path in result.changed
+                        ),
                     },
                 )
             return CommandResult(

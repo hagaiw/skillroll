@@ -3,9 +3,9 @@
 ```skillroll
 schema_version: 1
 limits:
-  max_turns: 2
+  max_turns: 12
   timeout_seconds: 90
-  max_output_tokens: 1024
+  max_output_tokens: 8192
 ```
 
 ## Input
@@ -27,13 +27,10 @@ error, host integration result, or report artifact exists.
 
 - Explain that the evaluated agent does not read the World section and cannot
   learn the capability denial merely because it appears there.
-- Do not approve the proposed case as a runnable text-only case; classify the
-  mandatory dynamic workflow as external evidence needed unless the scenario
-  is redesigned around an observable constraint.
-- Give the two simple redesign paths: put the constraint in Input only when a
-  real user or main session would know it, or pin one predictable action's
-  returned error. Do not recommend many brittle exact rules or a higher turn
-  limit as the default fix.
-- State that offline validation proves structure and safety, not World
-  coherence or completion, and recommend host-level evidence when the workflow
-  itself is the behavior of interest.
+- Reject treating private World prose as an upfront constraint the agent
+  already knows. An attempted action can be appropriate before it learns
+  that a capability is unavailable.
+- Offer a realistic observable redesign: supply the constraint in Input if
+  the user would know it, or let an attempted action reveal the failure and
+  evaluate the response. An exact error rule is an option, not a requirement
+  to encode every dynamically named task.

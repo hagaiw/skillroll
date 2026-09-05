@@ -42,6 +42,10 @@ def _parser() -> _Parser:
     parser.add_argument("--selection-path")
     parser.add_argument("--reviewed-ref")
     parser.add_argument("--run-commands", choices=("true", "false"), default="false")
+    parser.add_argument("--samples", type=int, default=1)
+    parser.add_argument(
+        "--with-skill-control", choices=("true", "false"), default="false"
+    )
     parser.add_argument("--command-notice", choices=("true", "false"), default="false")
     parser.add_argument("--fork-notice", choices=("true", "false"), default="false")
     parser.add_argument("--upload-artifact", choices=("true", "false"), default="false")
@@ -122,6 +126,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = _error("Artifact retention must be between 1 and 90 days.")
         print(render_json(result), end="")
         return result.outcome.exit_code
+    if not 1 <= args.samples <= 10:
+        result = _error("Sample count must be between 1 and 10.")
+        print(render_json(result), end="")
+        return result.outcome.exit_code
     root = Path.cwd()
     selected: ChangedSelection | None = None
     if args.mode == "validate-ref":
@@ -160,6 +168,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             repo=str(root),
             run_commands=args.run_commands == "true",
             selected_cases=None if selected is None else selected.cases,
+            samples=args.samples,
+            with_skill_control=args.with_skill_control == "true",
         )
     annotations = write_github_report(
         result,

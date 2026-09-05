@@ -257,6 +257,8 @@ def test_generated_workflow_has_visible_safe_boundaries() -> None:
     assert "release-verify" in workflow and "schedule:" not in workflow
     assert "workflow_dispatch" in workflow and "reviewed_ref" in workflow
     assert "run_repository_checks" in workflow
+    assert "with_skill_control" in workflow
+    assert "samples" in workflow
     assert "trusted-checks" in workflow
     assert "run-commands: false" in workflow
     validate_steps = parsed["jobs"]["validate"]["steps"]
@@ -272,6 +274,8 @@ def test_generated_workflow_has_visible_safe_boundaries() -> None:
     )
     assert live_action["with"]["run-commands"] is False
     assert live_action["with"]["command-notice"] is True
+    assert live_action["with"]["samples"] == 1
+    assert live_action["with"]["with-skill-control"] is False
     trusted_live_action = next(
         step
         for step in parsed["jobs"]["trusted-live-eval"]["steps"]
@@ -279,6 +283,10 @@ def test_generated_workflow_has_visible_safe_boundaries() -> None:
         and step.get("with", {}).get("mode") == "eval"
     )
     assert trusted_live_action["with"]["run-commands"] is False
+    assert trusted_live_action["with"]["samples"] == "${{ inputs.samples }}"
+    assert trusted_live_action["with"]["with-skill-control"] == (
+        "${{ inputs.with_skill_control }}"
+    )
     trusted_checks = parsed["jobs"]["trusted-checks"]
     assert "inputs.run_repository_checks" in trusted_checks["if"]
     trusted_check_action = next(
@@ -424,6 +432,18 @@ def test_github_report_emits_artifact_path_and_annotation_without_line(
     assert "file=skills/review/SKILL.md" in annotation and ",line=" not in annotation
     write_github_report(result, environment={"GITHUB_OUTPUT": str(output)})
     assert "artifact-path=.skillroll/runs/one" in output.read_text(encoding="utf-8")
+    experiment = CommandResult(
+        Outcome.PASS,
+        "sampled",
+        data={
+            "experiment_artifact_directory": ".skillroll/experiments/one",
+            "cases": ({"artifact_directory": ".skillroll/runs/child"},),
+        },
+    )
+    write_github_report(experiment, environment={"GITHUB_OUTPUT": str(output)})
+    assert "artifact-path=.skillroll/experiments/one" in output.read_text(
+        encoding="utf-8"
+    )
     missing = CommandResult(
         Outcome.PASS,
         "ok",
@@ -444,6 +464,19 @@ def test_private_action_rejects_invalid_scope_before_running(
         )
         == 3
     )
+    assert action_main(["--mode", "eval", "--scope", "all", "--samples", "0"]) == 3
+    assert action_main(["--mode", "eval", "--scope", "all", "--samples", "11"]) == 3
+    with pytest.raises(ValueError):
+        github_action._parser().parse_args(
+            [
+                "--mode",
+                "eval",
+                "--scope",
+                "all",
+                "--with-skill-control",
+                "yes",
+            ]
+        )
 
 
 def test_private_action_validates_ref_before_checkout_or_running_code(
@@ -588,6 +621,60 @@ def test_private_action_selects_docs_and_dispatches_validate_or_eval(
     assert called == ["validate", "eval"]
 
 
+def test_private_action_forwards_sampling_only_to_eval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = make_repository(tmp_path / "repository")
+    monkeypatch.chdir(repository)
+    eval_calls: list[dict[str, object]] = []
+    validate_calls: list[dict[str, object]] = []
+
+    def fake_evaluate(**kwargs: object) -> CommandResult:
+        eval_calls.append(kwargs)
+        return CommandResult(Outcome.PASS, "evaluated")
+
+    def fake_validate(**kwargs: object) -> CommandResult:
+        validate_calls.append(kwargs)
+        return CommandResult(Outcome.PASS, "validated")
+
+    monkeypatch.setattr(github_action.evaluate, "run", fake_evaluate)
+    monkeypatch.setattr(github_action.validate, "run", fake_validate)
+    assert (
+        action_main(
+            [
+                "--mode",
+                "eval",
+                "--scope",
+                "all",
+                "--samples",
+                "3",
+                "--with-skill-control",
+                "true",
+            ]
+        )
+        == 0
+    )
+    assert eval_calls[0]["samples"] == 3
+    assert eval_calls[0]["with_skill_control"] is True
+    assert (
+        action_main(
+            [
+                "--mode",
+                "validate",
+                "--scope",
+                "all",
+                "--samples",
+                "3",
+                "--with-skill-control",
+                "true",
+            ]
+        )
+        == 0
+    )
+    assert "samples" not in validate_calls[0]
+    assert "with_skill_control" not in validate_calls[0]
+
+
 def test_private_action_handles_invalid_repo_and_diff_fallback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -661,4 +748,14 @@ def test_composite_action_declares_no_secret_input_or_unsafe_trigger() -> None:
     assert "uv run --project" in action
     assert "actions/upload-artifact@v7" in action
     assert "command-notice" in parsed["inputs"]
+    assert parsed["inputs"]["samples"]["default"] == "1"
+    assert parsed["inputs"]["with-skill-control"]["default"] == "false"
     assert "--command-notice" in action
+    assert "--samples" in action and "--with-skill-control" in action
+    upload = next(
+        step
+        for step in parsed["runs"]["steps"]
+        if step.get("uses") == "actions/upload-artifact@v7"
+    )
+    assert ".skillroll/runs/" in upload["with"]["path"]
+    assert ".skillroll/experiments/" in upload["with"]["path"]

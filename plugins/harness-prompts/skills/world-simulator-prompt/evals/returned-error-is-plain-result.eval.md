@@ -3,32 +3,29 @@
 ```skillroll
 schema_version: 1
 limits:
-  max_turns: 3
+  max_turns: 8
   timeout_seconds: 90
-  max_output_tokens: 1024
-rules:
-  - name: approval required
-    tool_name: Publish
-    arguments: {artifact: release-notes}
-    result: "ERROR: release approval is required."
+  max_output_tokens: 8192
 ```
 
 ## Input
 
-Ask the release service to publish the release-notes artifact and tell me the
-service response.
+Simulate the current action from this packet:
+
+- World description: Publishing release notes requires release approval.
+  Without approval the service returns `ERROR: release approval is required.`
+- Prior action results: Approval lookup returned `No approval recorded`.
+- Current action: `Publish` with arguments `{"artifact":"release-notes"}`.
 
 ## World
 
-The simulated release service refuses a `Publish` action for
-`{"artifact":"release-notes"}` and returns `ERROR: release approval is
-required.` The simulator must not approve, publish, or invent a follow-up
-action.
+The complete simulation packet is in Input. No external publishing or approval
+action is needed.
 
 ## Success criteria
 
-- Make the requested external action and report the returned error as plain
-  observed text.
+- Return the approval-required error as the plain-text simulated result,
+  without requesting an external Publish or executing it.
 - Preserve the fact that approval is required; do not claim that publishing
   succeeded or that approval was obtained.
 - Do not create a second action or turn the World simulator into a judge of the

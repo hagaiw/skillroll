@@ -40,6 +40,16 @@ on:
         description: Skill or eval-case path for the selected scope
         required: false
         type: string
+      samples:
+        description: Independent model-backed samples to run (1-10)
+        required: false
+        default: 1
+        type: string
+      with_skill_control:
+        description: Also run samples without the selected skill for comparison
+        required: false
+        default: false
+        type: boolean
       run_repository_checks:
         description: Run repository-declared commands in a separate secretless job
         required: true
@@ -111,6 +121,8 @@ jobs:
           scope: changed
           base-sha: ${{{{ github.event.pull_request.base.sha }}}}
           head-sha: ${{{{ github.event.pull_request.head.sha }}}}
+          samples: 1
+          with-skill-control: false
           run-commands: false
           command-notice: true
           upload-artifact: true
@@ -148,6 +160,8 @@ jobs:
           mode: eval
           scope: ${{{{ inputs.scope }}}}
           selection-path: ${{{{ inputs.selection_path }}}}
+          samples: ${{{{ inputs.samples }}}}
+          with-skill-control: ${{{{ inputs.with_skill_control }}}}
           run-commands: false
           command-notice: true
           upload-artifact: true

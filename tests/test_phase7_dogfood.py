@@ -19,12 +19,19 @@ EXPECTED_PLUGINS = {
         "produce-review",
     ),
     "pr-overview": ("pr-overview",),
-    "skillroll-authoring": ("skillroll-setup", "eval-author"),
+    "skillroll-authoring": ("skillroll-setup", "skill-author", "eval-author"),
     "fact-check": ("fact-check",),
     "harness-prompts": (
         "executor-prompt",
         "world-simulator-prompt",
         "semantic-judge-prompt",
+    ),
+    "blind-skillroll-evaluation": (
+        "select-blind-targets",
+        "prepare-blind-trial",
+        "author-blind-evals",
+        "run-blind-evals",
+        "blind-skillroll-evaluation",
     ),
 }
 
@@ -54,9 +61,16 @@ def test_dogfood_skills_and_cases_validate_without_making_marketplace_required()
     assert report.config.skills_path.as_posix() == "plugins"
     assert report.config.inference is not None
     assert report.config.inference.model == "openai/gpt-4.1-nano"
+    assert report.config.inference.default_profile == "blind-live"
+    assert report.config.inference.profiles["blind-live"].models == (
+        "openai/gpt-5.6-luna-pro",
+    )
+    assert report.config.inference.profiles["muse-spark"].models == (
+        "meta/muse-spark-1.3-contributor",
+    )
     assert not report.findings
-    assert len(report.skills) == 13
-    assert len(report.cases) == 45
+    assert len(report.skills) == 19
+    assert len(report.cases) == 63
 
 
 def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> None:
@@ -78,24 +92,68 @@ def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> Non
             assert (path.parent / "references/context.md").is_file()
 
 
+def test_blind_evaluation_collection_keeps_phase_and_evidence_boundaries() -> None:
+    root = ROOT / "plugins/blind-skillroll-evaluation/skills"
+    expected_cases = {
+        "select-blind-targets": {
+            "preregister-before-results.eval.md",
+            "small-repositories-over-fame.eval.md",
+        },
+        "prepare-blind-trial": {
+            "advisory-ci-without-secret-leak.eval.md",
+            "pin-local-main-and-target.eval.md",
+        },
+        "author-blind-evals": {
+            "fresh-context-without-outcome-leakage.eval.md",
+            "replace-starters-before-freeze.eval.md",
+        },
+        "run-blind-evals": {
+            "live-inference-is-the-signal.eval.md",
+            "rerun-only-authoring-defect.eval.md",
+        },
+        "blind-skillroll-evaluation": {
+            "coordinate-independent-small-repo-trials.eval.md",
+            "report-mixed-results-and-product-fix.eval.md",
+        },
+    }
+
+    for skill, cases in expected_cases.items():
+        assert {path.name for path in (root / skill / "evals").glob("*.eval.md")} == (
+            cases
+        )
+
+    selection = (root / "select-blind-targets/SKILL.md").read_text().lower()
+    preparation = (root / "prepare-blind-trial/SKILL.md").read_text().lower()
+    authoring = (root / "author-blind-evals/SKILL.md").read_text().lower()
+    running = (root / "run-blind-evals/SKILL.md").read_text().lower()
+    campaign = (root / "blind-skillroll-evaluation/SKILL.md").read_text().lower()
+
+    assert "before any run outcomes" in selection
+    assert "current local skillroll main" in preparation
+    assert "do not read previous skillroll reports" in authoring
+    assert "only completed model-backed evals test skill behavior" in running
+    assert "use the installed `flow-runner`" in campaign
+
+
 def test_setup_skill_gives_weaker_models_a_direct_first_use_path() -> None:
     content = (
         ROOT / "plugins/skillroll-authoring/skills/skillroll-setup/SKILL.md"
     ).read_text(encoding="utf-8")
     normalized = " ".join(content.split())
     assert "**Instruction-only skill:**" in content
-    assert "do not call `Skill`, `Read`, `Write`, or any other tool" in normalized
+    assert "do not call `Skill`, `Write`, or an execution tool" in normalized
+    assert "A bounded `Read`" in content
     assert "## First-use path" in content
     assert "`skillroll init --skills-path <skills-folder> --yes`" in content
     assert (
         "`init` and `validate` do not need a configuration file or API key" in content
     )
-    assert "does not execute them or simulate setup" in content
-    assert "with a `Skill` action" in content
+    assert "does not execute the commands or simulate setup" in normalized
+    assert "with a `Skill` action" in normalized
 
 
 def test_dogfood_declared_renderer_check_runs_when_explicitly_permitted() -> None:
     result = validate.run(repo=str(ROOT), run_commands=True)
 
     assert result.outcome is Outcome.PASS
-    assert result.summary == "Validated 13 skills and ran 3 repository checks."
+    assert result.summary == "Validated 19 skills and ran 3 repository checks."

@@ -8,6 +8,7 @@
     {"name": "change-review-flow", "source": "./plugins/change-review-flow"},
     {"name": "pr-overview", "source": "./plugins/pr-overview"},
     {"name": "fact-check", "source": "./plugins/fact-check"},
-    {"name": "harness-prompts", "source": "./plugins/harness-prompts"}
+    {"name": "harness-prompts", "source": "./plugins/harness-prompts"},
+    {"name": "blind-skillroll-evaluation", "source": "./plugins/blind-skillroll-evaluation"}
   ]
 }

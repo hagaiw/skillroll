@@ -16,7 +16,7 @@ produced a complete answer, but the run ended in `ERROR`. I retried the exact
 case once and got the same error. Tell me what to change and how to record the
 result without silently turning the original errors into passes.
 
-## World
+The two run artifacts are supplied below:
 
 Both run artifacts show execution completed. In both artifacts, the semantic
 judge request ended with provider `finish_reason=length` at the configured
@@ -24,13 +24,17 @@ output-token limit, before a structured verdict could be decoded. Validation
 passed and no provider, parsing, or evidence-writing error occurred elsewhere.
 The diagnostic says: “The semantic judge exhausted max_output_tokens=700; no
 semantic verdict was produced. This run is a technical ERROR, not a skill
-FAIL.” It reports five criteria, no completed actions, and suggests a
-non-scoring diagnostic at 8,192 tokens.
+FAIL.” It reports five criteria and no completed actions.
+
+## World
+
+The supplied run excerpts contain the complete diagnostic evidence. No
+external retrieval is needed.
 
 ## Success criteria
 
 - Classify the repeated failure as an under-budgeted case limit at the semantic-judge stage, not as observed skill failure or a generic harness defect.
 - Explain that case `max_output_tokens` constrains the model-backed semantic judge as well as the expected skill answer.
-- Use the explicit complexity estimate to recommend a non-scoring diagnostic at 8,192 that changes only `max_output_tokens`, leaving Input, World, criteria, model, and other limits unchanged.
+- Recommend a separate diagnostic at 8,192 that changes only `max_output_tokens`; accept an explicit limit-only diagnostic without enumerating every unchanged field, but reject proposed changes to Input, World, criteria, model, or other limits.
 - Preserve both original `ERROR` artifacts and state that a completed diagnostic does not replace or relabel them.
 - Recommend inspecting the diagnostic transcript and criterion evidence before deciding whether the skill behavior passes or fails.

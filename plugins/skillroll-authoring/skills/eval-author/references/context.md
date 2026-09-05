@@ -27,6 +27,10 @@ The outside state and simulated action results needed for this scenario.
 
 Input should sound like a real user or main-session request. Do not put the
 expected answer, preferred workflow, review notes, or success conditions there.
+When a case tests whether the agent avoids an unsupported conclusion, Input may
+show the observed events and their timing, but it must not announce that causal
+evidence is absent, unknown, unconfirmed, or still under investigation. Put that
+absence in World so the case tests the intended inference boundary.
 
 World is the Dungeon Master's private scenario. The evaluated agent does not
 read it. When the agent requests an external action, the Dungeon Master returns
@@ -42,6 +46,27 @@ realistically in Input.
 Skill-local Markdown is available to the agent. Binary files and files outside
 the selected skill are not readable as text; describe any relevant external
 facts in World.
+
+## Preserve the knowledge boundary
+
+Before writing a boundary case, separate:
+
+- facts realistically supplied in Input;
+- instructions and knowledge present in the selected skill;
+- external facts discoverable only through actions in World; and
+- facts or capabilities that are unavailable.
+
+Do not assume that World prose is common knowledge. Do not make an unavailable
+fact discoverable merely to lead the skill to the answer. When an empty result,
+missing field, stale value, failed action, or conflicting source is material,
+define enough World behavior to distinguish the states the skill must handle.
+
+Useful candidate cases include an undocumented capability request, an empty
+result with domain-specific meaning, a missing prerequisite or authorization,
+conflicting current and older information, an action failure requiring recovery
+or an honest stop, and an exception to a general rule. These patterns are not a
+coverage checklist; select them only when they exercise an important skill-owned
+decision.
 
 ## Test behavior, not choreography
 
@@ -81,6 +106,13 @@ Use realistic pressure when it exposes a skill-owned choice without teaching
 the answer: urgency, missing evidence, stale success reports, or a request to
 skip a required check can all produce useful cases.
 
+During an audit, inspect prompt structure for candidate risks, then choose the
+smallest realistic case that could expose a consequential one. Record the
+implicated instruction, the assumed knowledge, the observable risk, and the
+evidence needed. A structural concern is not a demonstrated model failure.
+Recency, specificity, and apparent authority can suggest a conflict to test,
+but they are not universal rules for how a model resolves instructions.
+
 ## Diagnose the smallest responsible part
 
 | Evidence | Change |
@@ -98,10 +130,15 @@ Retry an unchanged technical error once when it may be transient. If it repeats,
 change only the implicated limit or component in a non-scoring diagnostic. Keep
 the original artifact; a successful diagnostic does not turn it into a pass.
 
-`max_output_tokens` covers every model-backed stage, including the
-judge. As a starting estimate, use 4,096 for one to three short criteria, 8,192
+`max_output_tokens` is one shared setting for every model-backed stage, including
+the judge; SkillRoll does not support a separate judge-budget field. As a
+starting estimate, use 4,096 for one to three short criteria, 8,192
 for four to six or a moderate transcript, and 16,384 for larger cases. These
 are estimates, not guarantees.
+
+After a limit-only diagnostic completes, inspect its transcript and criterion
+evidence before making a behavioral claim. A decoded verdict alone does not
+establish that the judge used the evidence correctly.
 
 ## Optional confidence checks
 

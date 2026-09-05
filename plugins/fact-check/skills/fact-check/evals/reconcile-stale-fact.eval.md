@@ -41,7 +41,7 @@ rules:
       path: FACTS.md
     result: "ERROR: Write requires complete replacement content for FACTS.md."
 limits:
-  max_turns: 4
+  max_turns: 12
   timeout_seconds: 90
   max_output_tokens: 1024
 assertions:

@@ -19,6 +19,16 @@ on:
         description: Skill or eval-case path for the selected scope
         required: false
         type: string
+      samples:
+        description: Independent model-backed samples to run (1-10)
+        required: false
+        default: 1
+        type: string
+      with_skill_control:
+        description: Also run samples without the selected skill for comparison
+        required: false
+        default: false
+        type: boolean
       run_repository_checks:
         description: Run repository-declared commands in a separate secretless job
         required: true
@@ -47,7 +57,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: validate
-        uses: hagaiw/skillroll@v0.1.0
+        uses: hagaiw/skillroll@v0.1.2
         continue-on-error: true
         with:
           mode: validate
@@ -82,7 +92,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: live
-        uses: hagaiw/skillroll@v0.1.0
+        uses: hagaiw/skillroll@v0.1.2
         continue-on-error: true
         env:
           SKILLROLL_API_KEY: ${{ secrets.SKILLROLL_API_KEY }}
@@ -91,6 +101,8 @@ jobs:
           scope: changed
           base-sha: ${{ github.event.pull_request.base.sha }}
           head-sha: ${{ github.event.pull_request.head.sha }}
+          samples: 1
+          with-skill-control: false
           run-commands: false
           command-notice: true
           upload-artifact: true
@@ -107,7 +119,7 @@ jobs:
     environment: skillroll-eval
     steps:
       - name: Check the reviewed revision format
-        uses: hagaiw/skillroll@v0.1.0
+        uses: hagaiw/skillroll@v0.1.2
         with:
           mode: validate-ref
           scope: all
@@ -122,13 +134,15 @@ jobs:
           ref: ${{ inputs.reviewed_ref }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: hagaiw/skillroll@v0.1.0
+      - uses: hagaiw/skillroll@v0.1.2
         env:
           SKILLROLL_API_KEY: ${{ secrets.SKILLROLL_API_KEY }}
         with:
           mode: eval
           scope: ${{ inputs.scope }}
           selection-path: ${{ inputs.selection_path }}
+          samples: ${{ inputs.samples }}
+          with-skill-control: ${{ inputs.with_skill_control }}
           run-commands: false
           command-notice: true
           upload-artifact: true
@@ -138,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check the reviewed revision format
-        uses: hagaiw/skillroll@v0.1.0
+        uses: hagaiw/skillroll@v0.1.2
         with:
           mode: validate-ref
           scope: all
@@ -154,7 +168,7 @@ jobs:
           ref: ${{ inputs.reviewed_ref }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: hagaiw/skillroll@v0.1.0
+      - uses: hagaiw/skillroll@v0.1.2
         with:
           mode: validate
           scope: ${{ inputs.scope }}
@@ -171,7 +185,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: release
-        uses: hagaiw/skillroll@v0.1.0
+        uses: hagaiw/skillroll@v0.1.2
         continue-on-error: true
         with:
           mode: validate
