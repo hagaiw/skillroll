@@ -56,15 +56,20 @@ def render_config(
 
 
 def render_ignore(existing: str | None) -> bytes:
-    """Add the one private run-artifact rule without touching other rules."""
+    """Add private run and experiment-artifact rules without other changes."""
+    rules = (".skillroll/runs/", ".skillroll/experiments/")
     if existing is None:
-        return b".skillroll/runs/\n"
+        return "".join(f"{rule}\n" for rule in rules).encode()
     lines = existing.splitlines()
-    if ".skillroll/runs/" in lines:
+    missing = [rule for rule in rules if rule not in lines]
+    if not missing:
         return existing.encode()
     newline = "\r\n" if "\r\n" in existing else "\n"
-    suffix = "" if not existing or existing.endswith(("\n", "\r")) else newline
-    return (existing + suffix + ".skillroll/runs/" + newline).encode()
+    rendered = existing
+    for rule in missing:
+        suffix = "" if not rendered or rendered.endswith(("\n", "\r")) else newline
+        rendered += suffix + rule + newline
+    return rendered.encode()
 
 
 def render_starter_case(name: str) -> bytes:

@@ -12,5 +12,6 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .skillroll/runs/
+.skillroll/experiments/
 *.DS_Store
 /internal/

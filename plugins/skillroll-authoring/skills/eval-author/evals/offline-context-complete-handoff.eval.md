@@ -3,9 +3,9 @@
 ```skillroll
 schema_version: 1
 limits:
-  max_turns: 3
-  timeout_seconds: 90
-  max_output_tokens: 1024
+  max_turns: 12
+  timeout_seconds: 180
+  max_output_tokens: 8192
 ```
 
 ## Input
@@ -16,7 +16,7 @@ conversation. Summarize the cases and deferrals, explain what the evidence
 means, and recommend the smallest next action. Do not imply that a live model
 run happened.
 
-## World
+Authoring record from the completed task:
 
 SkillRoll is the repository's drop-in eval harness for Agent Skills. Each
 Markdown case describes a request, a Dungeon Master simulation of the outside
@@ -37,22 +37,20 @@ selected because they were lower-priority or depended on unavailable external
 services. No current skill defect was found because no model-backed behavior
 was run.
 
+## World
+
+The completed authoring record is supplied in Input. No additional external
+evidence is needed to summarize it, and no live run is authorized.
+
 ## Success criteria
 
-- Open by explaining that SkillRoll is the repository's drop-in skill eval
-  harness, identify the inspected scope, and say that this is a small offline
-  batch rather than bare counts or unexplained case IDs.
-- Name both added paths and describe the behavior each case examines. Label
-  each case `Drafted` or equivalent offline-only evidence language; do not call
-  either case Discriminating, Regression-sensitive, or a caught gap.
+- Identify the inspected scope and the small offline eval-authoring batch in understandable terms; do not require a particular opening, heading, or product introduction.
+- Name both added paths and their behaviors, and make their offline-only evidence status clear; a shared statement applying to both cases is sufficient, without repeated per-case labels or unsupported behavioral claims.
 - Name the deferred document-renderer path and explain that visual PDF output
   needs renderer and inspection evidence outside this run. Make clear that
   the other four skills were not selected rather than silently implying full
   repository coverage.
-- State that offline validation passed, a model-backed eval and no-skill
-  comparison were not run, and no current skill defect was established.
-  Recommend review and a non-blocking/advisory next step instead of a blocking
-  CI gate.
+- State that offline validation passed, no model-backed eval or no-skill comparison ran, and no current defect was established. Recommend review or exploratory evaluation without promoting the cases to blocking CI; no CI disclaimer is needed if CI is not proposed.
 - Keep the handoff concise and independently understandable: include the
   affected paths, evidence boundary, limitation, and next action without
   requiring a repository search or the hidden authoring conversation.

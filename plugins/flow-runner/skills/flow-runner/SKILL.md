@@ -12,6 +12,7 @@ name is always `Skill`, never the step name or `flow-runner`. Request one step
 at a time and wait for its result before requesting the next. After every step
 has returned, preserve which step
 supplied each fact and combine only the evidence that was returned. If a step
-or artifact is missing, say what is missing and stop rather than inventing it.
+is missing or fails, or its artifact is absent or malformed, identify that
+result and stop rather than counting it as completed or inventing content.
 
 Use the [flow context](references/context.md) for the artifact format.

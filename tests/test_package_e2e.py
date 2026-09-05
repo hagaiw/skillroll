@@ -210,7 +210,9 @@ def test_installed_wheel_initializes_and_validates_spaced_skill_repositories(
         "plugins/review/evals/first-use.eval.md",
         "plugins/review/evals/edge-case.eval.md",
     ]
-    assert (generic / ".gitignore").read_bytes() == b"# mine\r\n.skillroll/runs/\r\n"
+    assert (generic / ".gitignore").read_bytes() == (
+        b"# mine\r\n.skillroll/runs/\r\n.skillroll/experiments/\r\n"
+    )
     assert (review / "evals" / "first-use.eval.md").exists()
     placeholder_validation = _run_installed(environment, generic, "validate", "--all")
     assert placeholder_validation.returncode == 1
@@ -373,5 +375,5 @@ def test_installed_wheel_validates_the_dogfood_marketplace_without_source_import
 
     assert completed.returncode == 0
     assert json.loads(completed.stdout)["summary"] == (
-        "Validated 18 skills and ran 3 repository checks."
+        "Validated 19 skills and ran 3 repository checks."
     )

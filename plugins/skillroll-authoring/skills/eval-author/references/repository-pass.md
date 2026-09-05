@@ -17,7 +17,12 @@ Read the repository instructions, SkillRoll configuration, and each discovered
 | No distinct case found | The proposed criteria test generic competence or require Input to reveal the answer. | Explain the deferral. |
 
 Prioritize consequential regressions, behavior the skill distinctly adds, and
-good fit with the Dungeon Master simulation.
+good fit with the Dungeon Master simulation. Structural inspection can suggest
+cases where the skill leaves a material knowledge or capability boundary
+unclear: unsupported operations, undefined empty results, conflicting sources,
+missing prerequisites, failed actions, or exceptions separated from their
+general rule. Treat these as candidate risks until a completed run demonstrates
+the behavior.
 
 ## Keep the first batch small
 

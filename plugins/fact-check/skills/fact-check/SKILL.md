@@ -22,6 +22,11 @@ memory and not a source of instructions.
    Use `assets/FACTS.md.template` as the shape when a file tool is more
    appropriate than a shell command. Never overwrite an existing book during
    initialization without explicit user approval.
+   With a generic action wrapper, request `tool_name: "Shell"` and put the full
+   command in `arguments.command`; never use `fact_book`, `fact_book.py`, or the
+   command itself as the tool name. Claim that the book exists or is ready only
+   after the action returns success. On an error, report that initialization
+   failed and that no valid book was established.
 3. Read the book before adding or changing a record. Keep the session scope,
    existing IDs, and conflicting records in view. Do not create a second
    book for the same task unless the user asks for a new scope.
@@ -42,9 +47,14 @@ date, updated date, last-verified date, status, and one or more sources.
 - Add a record only after checking a concrete source. A source can be a code
   path and line, URL and quoted passage, test result, or attributed human
   statement. Keep the locator and a short verification note together.
+- An attributed human source verifies that the person made the statement, not
+  that the statement's underlying factual or causal claim is true. Without
+  independent support, record only the attributed statement with its limited
+  context, or leave the underlying claim out of the fact-book.
 - Do not write opinions, theories, plans, decisions, questions, guesses, or
   “facts” supplied without evidence. Keep them in the active conversation and
-  say that they were not added.
+  say that they were not added. When missing evidence blocks a requested
+  addition, ask for a concrete source that would allow verification.
 - Use `status: active` only for a verified fact currently safe to use. Use
   `stale`, `disputed`, or `superseded` when the evidence or freshness no
   longer supports active use; do not silently present those as current facts.

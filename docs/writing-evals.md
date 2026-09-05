@@ -12,7 +12,8 @@ Dungeon Master returns a result that fits your description. You write the
 situation, not a mock framework or a skill-specific test harness.
 
 Keep each case under the selected skill's `evals/` directory and test one
-important behavior.
+important behavior. The canonical quality and audit standard is in the
+[eval-author context](../plugins/skillroll-authoring/skills/eval-author/references/context.md).
 
 ## Start with a behavior
 
@@ -60,10 +61,15 @@ learns about the World only through the results of its actions. The Dungeon
 Master cannot access the real filesystem, shell, network, services, or other
 skills.
 
-`Success criteria` are observable outcomes. Write three to five when
-possible, and allow equivalent wording and reasonable action choices. A
-promise to act later is not completed work. Plausible code is not proof that
-it runs.
+For boundary cases, separate what the agent already knows from Input or the
+skill, what it can discover through World actions, and what remains unavailable.
+Define the meaning of a material empty result, missing field, conflict, or
+failed action; do not rely on the Dungeon Master to guess the distinction.
+
+`Success criteria` are observable outcomes. Use only the criteria needed for
+the one behavior; three to five is often enough. Allow equivalent wording and
+reasonable action choices. A promise to act later is not completed work.
+Plausible code is not proof that it runs.
 
 For a text-only case, say that no external interaction is needed.
 
@@ -97,6 +103,11 @@ the current directory; use `--all` to evaluate every configured case.
 If the result is surprising, inspect the transcript. Change the skill when its
 behavior is wrong. Change the case when its Input, World, or criteria do not
 describe the intended behavior clearly.
+
+A prompt audit can identify a plausible risk, such as a missing prerequisite or
+an undefined failure path. That finding proposes a case; it is not evidence that
+the model failed. Reserve behavioral claims for completed runs and keep model,
+tool, limit, and harness failures as alternative explanations.
 
 ## Simulated behavior and real checks
 

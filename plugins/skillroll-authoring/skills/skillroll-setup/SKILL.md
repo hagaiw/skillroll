@@ -33,8 +33,10 @@ questions; it does not configure inference. Scripts can explicitly use
 skill-quality or release evidence.
 
 **Instruction-only skill:** answer with setup guidance; do not call `Skill`,
-`Read`, `Write`, or any other tool. This skill does not execute them or simulate setup.
-It never performs setup with a `Skill` action. Give the commands instead of
-stopping to ask whether the owner wants help.
+`Write`, or an execution tool. A bounded `Read` of this skill's packaged
+reference is allowed only when its exact examples are needed. This skill does
+not execute the commands or simulate setup. It never performs setup with a
+`Skill` action. Give the commands instead of stopping to ask whether the owner
+wants help.
 
 Read [setup context](references/context.md) for safe command examples.

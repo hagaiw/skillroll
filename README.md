@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="#quickstart"><strong>Get started</strong></a> ·
+  <a href="docs/authoring.md">Author skills and evals</a> ·
   <a href="docs/writing-evals.md">Write an eval</a> ·
   <a href="docs/results.md">Understand a result</a>
 </p>
@@ -290,6 +291,11 @@ the same repository, create a `skillroll-eval` environment with a secret named
 by `api_key_env`, then set the `SKILLROLL_LIVE_EVAL` repository variable to
 `true`. Fork pull requests never receive the key.
 
+The generated pull-request job uses one sample and no no-skill control. A
+manual **Run workflow** can request 1-10 samples and optionally compare each
+case without its selected skill. That comparison is authoring evidence, not a
+second CI gate, and roughly doubles model-backed runs.
+
 Start with advisory results. See the
 [GitHub Actions guide](docs/github-actions.md) for manual runs, repository
 checks, and artifact retention.
@@ -314,8 +320,9 @@ skillroll is local, open source infrastructure:
   the endpoint you configure when running `doctor` or an eval.
 - API keys stay in environment variables. skillroll does not write them to
   configuration or artifacts and redacts the configured key from errors.
-- Run artifacts stay under `.skillroll/runs/` and are ignored by the generated
-  `.gitignore` rule.
+- Run artifacts stay under `.skillroll/runs/` and sampled experiment reports
+  under `.skillroll/experiments/`; both are ignored by the generated `.gitignore`
+  rules.
 - skillroll is released under the permissive [MIT License](LICENSE). The code,
   prompts, and security boundaries are public and reviewable.
 - The simulated World cannot access your real filesystem, shell, network, or
@@ -331,6 +338,7 @@ today; expect the interface to change between minor releases.
 
 ## Learn more
 
+- [Author and audit good skills and evals](docs/authoring.md)
 - [Write an eval](docs/writing-evals.md)
 - [Configure models and cost](docs/configuration.md)
 - [Understand results and fix problems](docs/results.md)

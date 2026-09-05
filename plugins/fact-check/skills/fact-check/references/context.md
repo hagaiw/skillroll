@@ -52,6 +52,11 @@ Do not add a record with `Source: none`, a remembered value, or an unverified
 interpretation. Keep that material in the active conversation until a source
 supports a fact.
 
+A human-message locator establishes who made a statement and what they said.
+It does not independently verify the statement's underlying diagnosis, cause,
+quantity, or other factual claim. Phrase the record as an attribution unless
+another source establishes the underlying claim.
+
 ## Lifecycle and freshness
 
 | Status | Meaning |
@@ -79,6 +84,7 @@ record with `Supersedes: R-###`; make the old record non-active.
 - Last verified: 2026-08-18
 - Tags: cache, release
 - Source: `url: https://example.test/release-notes` — “Cache keys now include tenant ID.”
+- Supersedes: R-003
 - Context: Applies to release 4.2 of the service.
 - Statement: Release 4.2 includes the tenant ID in cache keys.
 
@@ -91,7 +97,6 @@ record with `Supersedes: R-###`; make the old record non-active.
 - Last verified: 2026-08-10
 - Tags: cache, release
 - Source: `file: release-4.1.md` — cache keys did not include tenant ID.
-- Supersedes: R-001
 - Context: Applies only to release 4.1 and earlier.
 - Statement: Release 4.1 cache keys did not include the tenant ID.
 ```

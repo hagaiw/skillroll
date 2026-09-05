@@ -19,7 +19,7 @@ EXPECTED_PLUGINS = {
         "produce-review",
     ),
     "pr-overview": ("pr-overview",),
-    "skillroll-authoring": ("skillroll-setup", "eval-author"),
+    "skillroll-authoring": ("skillroll-setup", "skill-author", "eval-author"),
     "fact-check": ("fact-check",),
     "harness-prompts": (
         "executor-prompt",
@@ -61,13 +61,16 @@ def test_dogfood_skills_and_cases_validate_without_making_marketplace_required()
     assert report.config.skills_path.as_posix() == "plugins"
     assert report.config.inference is not None
     assert report.config.inference.model == "openai/gpt-4.1-nano"
-    assert report.config.inference.default_profile == "dogfood"
+    assert report.config.inference.default_profile == "blind-live"
     assert report.config.inference.profiles["blind-live"].models == (
         "openai/gpt-5.6-luna-pro",
     )
+    assert report.config.inference.profiles["muse-spark"].models == (
+        "meta/muse-spark-1.3-contributor",
+    )
     assert not report.findings
-    assert len(report.skills) == 18
-    assert len(report.cases) == 55
+    assert len(report.skills) == 19
+    assert len(report.cases) == 63
 
 
 def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> None:
@@ -138,18 +141,19 @@ def test_setup_skill_gives_weaker_models_a_direct_first_use_path() -> None:
     ).read_text(encoding="utf-8")
     normalized = " ".join(content.split())
     assert "**Instruction-only skill:**" in content
-    assert "do not call `Skill`, `Read`, `Write`, or any other tool" in normalized
+    assert "do not call `Skill`, `Write`, or an execution tool" in normalized
+    assert "A bounded `Read`" in content
     assert "## First-use path" in content
     assert "`skillroll init --skills-path <skills-folder> --yes`" in content
     assert (
         "`init` and `validate` do not need a configuration file or API key" in content
     )
-    assert "does not execute them or simulate setup" in content
-    assert "with a `Skill` action" in content
+    assert "does not execute the commands or simulate setup" in normalized
+    assert "with a `Skill` action" in normalized
 
 
 def test_dogfood_declared_renderer_check_runs_when_explicitly_permitted() -> None:
     result = validate.run(repo=str(ROOT), run_commands=True)
 
     assert result.outcome is Outcome.PASS
-    assert result.summary == "Validated 18 skills and ran 3 repository checks."
+    assert result.summary == "Validated 19 skills and ran 3 repository checks."

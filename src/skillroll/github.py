@@ -394,15 +394,19 @@ def write_github_report(
     if output_path:
         selected = 0 if selection is None else len(selection.cases)
         reason = "" if selection is None else selection.reason
-        cases = result.data.get("cases")
         artifact = ""
-        if isinstance(cases, tuple):
-            for item in cases:
-                if isinstance(item, Mapping):
-                    candidate = item.get("artifact_directory")
-                    if isinstance(candidate, str):
-                        artifact = candidate
-                        break
+        experiment = result.data.get("experiment_artifact_directory")
+        if isinstance(experiment, str) and experiment:
+            artifact = experiment
+        else:
+            cases = result.data.get("cases")
+            if isinstance(cases, tuple):
+                for item in cases:
+                    if isinstance(item, Mapping):
+                        candidate = item.get("artifact_directory")
+                        if isinstance(candidate, str):
+                            artifact = candidate
+                            break
         Path(output_path).write_text(
             f"outcome={_one_line(result.outcome.name)}\n"
             f"selected-case-count={selected}\n"
