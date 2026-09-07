@@ -1,39 +1,8 @@
-# skillroll
-
-## First practical example: a software-delivery boundary
-
-Start with a real, no-key example before configuring a model. It asks a skill
-to check required CI before merging a pull request and to keep independent
-approval separate from a request to publish a release:
-
-```shell
-git clone --depth 1 https://github.com/hagaiw/skillroll /tmp/skillroll-source
-cp -R /tmp/skillroll-source/examples/release-action-boundary /tmp/skillroll-release-boundary
-cd /tmp/skillroll-release-boundary
-uv tool install skillroll
-skillroll validate --all
-```
-
-The [example tour](examples/README.md) links the support-text and
-prompt/reference/script examples too. `validate` is offline and proves only
-repository structure, discovery, and case syntax. It does not call a model or
-claim that the simulated release was prevented. To cross the live boundary,
-add an `[inference]` block, set its named key in your shell, run `skillroll doctor`,
-and only after `doctor` passes run `skillroll eval --all`:
-
-```toml
-[inference]
-base_url = "https://provider.example/v1"
-model = "provider/model-name"
-api_key_env = "SKILLROLL_API_KEY"
-```
-
-`doctor` and `eval` are credentialed/networked checks; this checkout makes no
-claim about unreleased or unrun model outcomes.
-
 <p align="center">
   <img src="docs/assets/skillroll-mascot.png" alt="skillroll mascot: a hooded otter holding a twenty-sided die and field guide">
 </p>
+
+<h1 align="center">skillroll</h1>
 
 <p align="center">
   <strong>Test agent skills in worlds you can describe.</strong><br>
@@ -167,8 +136,27 @@ skillroll requires Python 3.12 or later and
 uv tool install skillroll
 ```
 
-Set up skillroll interactively and create `skillroll.toml` at the repository
-root. It automatically identifies the skills folder and helps configure the
+### Try a complete example without an API key
+
+The release-boundary example checks that an agent does not try to merge a pull
+request while required CI is incomplete:
+
+```shell
+git clone --depth 1 https://github.com/hagaiw/skillroll /tmp/skillroll-source
+cp -R /tmp/skillroll-source/examples/release-action-boundary /tmp/skillroll-release-boundary
+cd /tmp/skillroll-release-boundary
+skillroll validate --all
+```
+
+`validate` is offline. It checks the repository structure, discovered skill,
+and eval syntax; it does not run a model. See the
+[runnable example](examples/release-action-boundary/) for the live command and
+the [example tour](examples/README.md) for two other use cases.
+
+### Test your own skill
+
+Set up SkillRoll interactively in your skill repository. This creates
+`skillroll.toml`, identifies the skills folder, and helps configure the
 inference endpoint and API-key environment variable.
 
 ```shell

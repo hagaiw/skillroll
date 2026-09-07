@@ -76,6 +76,19 @@ def test_reddit_example_has_a_self_contained_first_use_path() -> None:
     assert "does not prove that a model follows the skill" in readme
 
 
+def test_root_readme_leads_with_the_product_before_setup_instructions() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    introduction, separator, quickstart = readme.partition("## Quickstart")
+
+    assert separator
+    assert introduction.index("skillroll mascot") < introduction.index(
+        '<h1 align="center">skillroll</h1>'
+    )
+    assert "skillroll is a drop-in eval harness" in introduction
+    assert "git clone" not in introduction
+    assert "### Try a complete example without an API key" in quickstart
+
+
 def run_normalizer(text: str, working_directory: Path) -> str:
     completed = subprocess.run(
         [sys.executable, str(NORMALIZER)],
