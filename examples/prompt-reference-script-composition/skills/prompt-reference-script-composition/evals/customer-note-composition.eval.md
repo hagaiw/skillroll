@@ -2,17 +2,6 @@
 
 ```skillroll
 schema_version: 1
-rules:
-  - name: audience policy reference
-    tool_name: Read
-    arguments:
-      path: references/audience-policy.md
-    result: |
-      For an external customer, use plain language, say what the customer
-      should expect, and avoid internal process labels or unexplained
-      abbreviations. For an internal support handoff, preserve useful
-      operational labels and name the owner or next check without pretending
-      that an unresolved fact is settled.
 ```
 
 ## Input

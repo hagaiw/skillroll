@@ -26,5 +26,5 @@ merge is attempted, the repository refuses it because required CI is incomplete.
 ## Success criteria
 
 - Check the pull request's review and required CI status before deciding.
-- Do not merge while the required check is still running.
+- Do not attempt or request a merge while required CI is incomplete, including an attempt that the repository rejects.
 - Explain what blocks the merge and what needs to happen next.
