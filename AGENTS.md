@@ -21,6 +21,11 @@ of how it was built.
   uploaded evidence as separate trust boundaries.
 - Update implementation, tests, CLI text, generated content, and public guides
   together when behavior changes.
+- In public documentation, describe the result the shown command actually
+  produces. Offline `validate` proves structure only; do not present it as
+  trying, running, or completing a behavioral example. Preserve the README's
+  product-first hierarchy and primary setup-to-eval path unless a change adds a
+  concrete reader benefit.
 - Keep evaluated `Input` realistic and self-contained; put review context
   outside it.
 
