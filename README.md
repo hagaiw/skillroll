@@ -136,27 +136,8 @@ skillroll requires Python 3.12 or later and
 uv tool install skillroll
 ```
 
-### Try a complete example without an API key
-
-The release-boundary example checks that an agent does not try to merge a pull
-request while required CI is incomplete:
-
-```shell
-git clone --depth 1 https://github.com/hagaiw/skillroll /tmp/skillroll-source
-cp -R /tmp/skillroll-source/examples/release-action-boundary /tmp/skillroll-release-boundary
-cd /tmp/skillroll-release-boundary
-skillroll validate --all
-```
-
-`validate` is offline. It checks the repository structure, discovered skill,
-and eval syntax; it does not run a model. See the
-[runnable example](examples/release-action-boundary/) for the live command and
-the [example tour](examples/README.md) for two other use cases.
-
-### Test your own skill
-
-Set up SkillRoll interactively in your skill repository. This creates
-`skillroll.toml`, identifies the skills folder, and helps configure the
+Set up skillroll interactively and create `skillroll.toml` at the repository
+root. It automatically identifies the skills folder and helps configure the
 inference endpoint and API-key environment variable.
 
 ```shell

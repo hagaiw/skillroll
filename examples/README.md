@@ -19,7 +19,7 @@ refund state. The [prompt-reference-script-composition](prompt-reference-script-
 example keeps audience policy in a reference, repeated heading formatting in a
 standard-library-only script, and content judgment in the prompt.
 
-## Offline first-use path
+## Validate the example structure
 
 The release-boundary example can be obtained from the public repository and
 copied before changing directory:
