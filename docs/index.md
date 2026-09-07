@@ -9,6 +9,10 @@ SkillRoll is a drop-in eval harness for skills repositories. Start with the
 [README](https://github.com/hagaiw/skillroll#readme) to install it and run one
 Markdown case.
 
+For a no-key tour, browse the
+[checked-in adoption examples](https://github.com/hagaiw/skillroll/tree/main/examples),
+starting with the release-action boundary and its offline `validate` path.
+
 Then follow the part of the loop you need:
 
 1. [Author skills and evals](authoring.md): use the canonical quality and
