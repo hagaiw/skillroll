@@ -12,6 +12,11 @@
 ## Records
 
 <!--
-Add one verified fact per record. Use a stable R-### ID and keep each field on
-one line. Do not write opinions, theories, plans, or unsourced claims here.
+Add one small record per stable R-### ID and keep each field on one line.
+Use Kind: fact | conclusion | lead | attribution and distinguish them in reports.
+Required: Status, Kind, Confidence, Created, Updated, Last verified, Context,
+Statement. Source is required except for conclusions, which require
+Derived from: R-###, R-### and a Reasoning line. Leads need a checked observation;
+they are not verified causes. Do not write plans or unsupported guesses here.
+Keep this ledger uncommitted unless deliberately retained as a deliverable.
 -->

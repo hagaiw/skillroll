@@ -5,6 +5,17 @@ Notable user-visible changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Fact-check distinguishes facts, derived conclusions, observed leads, and
+  attributed statements while accepting existing ledgers. It records conclusion
+  dependencies and reasoning, clarifies relayed configuration provenance and
+  ledger archival, and checks the scope of negative claims before capture.
+- Fact-check helper examples resolve from the loaded skill directory so they
+  work from a task workspace. Validation rejects dangling supersedes links;
+  optional `check --warn` reports overdue active records, with `--as-of` for
+  reproducible reviews.
+
 ## [0.1.2] - 2026-08-23
 
 ### Changed

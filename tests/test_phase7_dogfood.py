@@ -70,7 +70,7 @@ def test_dogfood_skills_and_cases_validate_without_making_marketplace_required()
     )
     assert not report.findings
     assert len(report.skills) == 19
-    assert len(report.cases) == 63
+    assert len(report.cases) == 68
 
 
 def test_agentic_skills_link_context_without_flow_runner_review_leakage() -> None:

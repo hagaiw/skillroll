@@ -16,17 +16,26 @@ RECORD_HEADING = re.compile(r"^### (?P<identifier>R-[0-9]{3,}) — (?P<title>.+)
 RECORD_ID = re.compile(r"^R-[0-9]{3,}$")
 ALLOWED_STATUSES = {"active", "stale", "disputed", "superseded"}
 ALLOWED_CONFIDENCE = {"high", "medium", "low"}
+ALLOWED_KINDS = {"fact", "conclusion", "lead", "attribution"}
 REQUIRED_FIELDS = {
     "Status",
     "Confidence",
     "Created",
     "Updated",
     "Last verified",
-    "Source",
     "Context",
     "Statement",
 }
-RECORD_FIELDS = REQUIRED_FIELDS | {"Tags", "Review by", "Supersedes", "Note"}
+RECORD_FIELDS = REQUIRED_FIELDS | {
+    "Source",
+    "Tags",
+    "Review by",
+    "Supersedes",
+    "Note",
+    "Kind",
+    "Derived from",
+    "Reasoning",
+}
 SESSION_FIELDS = {"Scope", "Started", "Last updated", "Review rule"}
 
 
@@ -85,13 +94,24 @@ def _validate_record(
     identifier: str, title: str, fields: dict[str, str], location: str
 ) -> list[str]:
     errors: list[str] = []
-    missing = sorted(REQUIRED_FIELDS - fields.keys())
+    kind = fields.get("Kind", "fact")
+    required = REQUIRED_FIELDS | (
+        {"Derived from", "Reasoning"} if kind == "conclusion" else {"Source"}
+    )
+    missing = sorted(required - fields.keys())
     if missing:
         errors.append(
             f"{location}: record {identifier} is missing {', '.join(missing)}."
         )
     if not title.strip():
         errors.append(f"{location}: record {identifier} needs a title.")
+    if kind not in ALLOWED_KINDS:
+        errors.append(f"{location}: record {identifier} has an invalid Kind.")
+    if kind == "conclusion":
+        if not fields.get("Reasoning", "").strip():
+            errors.append(f"{location}: conclusion needs non-empty Reasoning.")
+    elif "Derived from" in fields or "Reasoning" in fields:
+        errors.append(f"{location}: Derived from and Reasoning belong to conclusions.")
     status = fields.get("Status")
     if status is not None and status not in ALLOWED_STATUSES:
         errors.append(f"{location}: record {identifier} has an invalid Status.")
@@ -108,11 +128,27 @@ def _validate_record(
     if review_by is not None and review_by != "not set" and not _is_date(review_by):
         errors.append(f"{location}: record {identifier} has an invalid Review by date.")
     source_values = fields.get("Source", "").splitlines()
-    if not source_values or any(
+    if (not source_values and kind != "conclusion") or any(
         not value.strip() or value.casefold().startswith("none")
         for value in source_values
     ):
         errors.append(f"{location}: fact {identifier} needs a concrete Source.")
+    if "Source" in fields and not source_values:
+        errors.append(f"{location}: an optional Source must still be concrete.")
+    if (
+        source_values
+        and all(
+            value.lstrip("`").casefold().startswith("human-config:")
+            for value in source_values
+        )
+        and kind != "attribution"
+    ):
+        if confidence == "high":
+            errors.append(
+                f"{location}: human-config alone cannot justify high Confidence."
+            )
+        if not fields.get("Note", "").strip():
+            errors.append(f"{location}: human-config needs a reproduction Note.")
     for name in ("Context", "Statement"):
         if not fields.get(name, "").strip():
             errors.append(f"{location}: record {identifier} needs a non-empty {name}.")
@@ -130,13 +166,13 @@ def _validate_record(
     return errors
 
 
-def validate_text(text: str) -> list[str]:
-    """Return structural and lifecycle errors without making network calls."""
+def _parse_book(text: str) -> tuple[dict[str, dict[str, str]], list[str]]:
+    """Parse records and return structural errors using one shared parser."""
     lines = text.splitlines()
     errors: list[str] = []
     if not lines or lines[0].strip() != HEADER:
         errors.append("line 1: file must start with '# Fact book'.")
-        return errors
+        return {}, errors
     try:
         session_start = lines.index("## Session")
     except ValueError:
@@ -168,7 +204,7 @@ def validate_text(text: str) -> list[str]:
         if started is not None and last_updated is not None and started > last_updated:
             errors.append("session: Started cannot be after Last updated.")
     if records_start < 0:
-        return errors
+        return {}, errors
     record_lines = lines[records_start + 1 :]
     headings: list[tuple[int, re.Match[str]]] = []
     active_heading = False
@@ -240,7 +276,82 @@ def validate_text(text: str) -> list[str]:
                     f"record {identifier}: Supersedes target {target} is newer "
                     "than the replacing record."
                 )
+    return records, errors
+
+
+def _validate_dependencies(records: dict[str, dict[str, str]]) -> list[str]:
+    errors: list[str] = []
+    dependencies: dict[str, list[str]] = {}
+    for identifier, fields in records.items():
+        if fields.get("Kind", "fact") != "conclusion":
+            continue
+        targets = [part.strip() for part in fields.get("Derived from", "").split(",")]
+        if any(not RECORD_ID.fullmatch(target) for target in targets):
+            errors.append(
+                f"record {identifier}: Derived from needs comma-separated R-### IDs."
+            )
+            continue
+        if len(targets) != len(set(targets)):
+            errors.append(f"record {identifier}: Derived from repeats a premise.")
+        dependencies[identifier] = targets
+        for target in targets:
+            premise = records.get(target)
+            if target == identifier:
+                errors.append(
+                    f"record {identifier}: Derived from cannot refer to itself."
+                )
+            elif premise is None:
+                errors.append(f"record {identifier}: premise {target} is missing.")
+            elif premise.get("Kind", "fact") not in {"fact", "conclusion"}:
+                errors.append(
+                    f"record {identifier}: premise {target} must be a fact "
+                    "or conclusion."
+                )
+            elif fields.get("Status") == "active" and premise.get("Status") != "active":
+                errors.append(
+                    f"record {identifier}: active conclusion needs active "
+                    f"premise {target}."
+                )
+    # Iterative topological removal avoids recursion limits on imported ledgers.
+    remaining = {
+        identifier: set(targets) & dependencies.keys()
+        for identifier, targets in dependencies.items()
+    }
+    while remaining:
+        ready = {identifier for identifier, targets in remaining.items() if not targets}
+        if not ready:
+            errors.append("Derived from contains a dependency cycle.")
+            break
+        remaining = {
+            identifier: targets - ready
+            for identifier, targets in remaining.items()
+            if identifier not in ready
+        }
     return errors
+
+
+def validate_text(text: str) -> list[str]:
+    """Return structural and lifecycle errors, without checking source truth."""
+    records, errors = _parse_book(text)
+    return errors + _validate_dependencies(records)
+
+
+def warning_messages(text: str, as_of: dt.date) -> list[str]:
+    """Report explicit overdue reviews without changing records or status."""
+    records, _ = _parse_book(text)
+    warnings: list[str] = []
+    for identifier, fields in records.items():
+        review_by = _parse_date(fields.get("Review by", ""))
+        if (
+            fields.get("Status") == "active"
+            and review_by is not None
+            and review_by < as_of
+        ):
+            warnings.append(
+                f"record {identifier}: active but Review by {review_by} "
+                f"is past due as of {as_of}."
+            )
+    return warnings
 
 
 def _template_path() -> Path:
@@ -339,6 +450,16 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true", help="replace an existing file")
     check = subparsers.add_parser("check", help="validate an existing fact-book")
     check.add_argument("path", type=Path)
+    check.add_argument(
+        "--warn",
+        action="store_true",
+        help="report overdue active records without failing on warnings",
+    )
+    check.add_argument(
+        "--as-of",
+        default=dt.date.today().isoformat(),
+        help="ISO date for freshness warnings (defaults to today; use with --warn)",
+    )
     subparsers.add_parser("self-test", help="run the script's deterministic self-test")
     return parser
 
@@ -371,12 +492,18 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"Initialized {args.path} for scope: {args.scope.strip()}")
         return 0
+    if not _is_date(args.as_of):
+        print("ERROR: --as-of must be an ISO date (YYYY-MM-DD).", file=sys.stderr)
+        return 2
     try:
         text = args.path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         print(f"ERROR: could not read {args.path}: {error}", file=sys.stderr)
         return 1
     errors = validate_text(text)
+    if args.warn:
+        for warning in warning_messages(text, dt.date.fromisoformat(args.as_of)):
+            print(f"WARN: {warning}", file=sys.stderr)
     if errors:
         print(f"FAIL: {args.path} has {len(errors)} issue(s).", file=sys.stderr)
         for error in errors:

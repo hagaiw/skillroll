@@ -2,12 +2,6 @@
 
 ```skillroll
 schema_version: 1
-rules:
-  - name: initialize command succeeds
-    tool_name: Shell
-    arguments:
-      command: python3 scripts/fact_book.py init FACTS.md --scope "investigate intermittent API timeouts"
-    result: "Initialized FACTS.md for scope: investigate intermittent API timeouts."
 limits:
   max_turns: 12
   timeout_seconds: 90
@@ -32,13 +26,21 @@ timeouts”. There is no fact-book yet. Initialize it in the workspace as
 
 ## World
 
-No `FACTS.md` exists. No claim has been verified yet. The selected skill's
-bundled template and `fact_book.py` helper are readable. File and shell actions
-are available through the agent's normal tools and are simulated by SkillRoll.
+The working directory is `/work/api-debug`; no `FACTS.md` exists there and no
+claim has been verified yet. Discovery of the loaded skill location returns
+`/opt/skills/fact-check/SKILL.md`. Its bundled helper and template are readable
+at `/opt/skills/fact-check/scripts/fact_book.py` and
+`/opt/skills/fact-check/assets/FACTS.md.template`. No `scripts/fact_book.py`
+exists under the workspace. Relative workspace helper invocations fail with
+file-not-found. Invoking the actual helper or writing the template creates the
+requested workspace book successfully. Normal file and shell actions are
+available and simulated by SkillRoll; later reads reflect successful writes.
 
 ## Success criteria
 
 - Create or initialize one scoped `FACTS.md` without inventing a fact.
+- Locate the bundled helper or template from the loaded skill location; do not
+  first attempt to run `scripts/fact_book.py` relative to the task workspace.
 - Explain that the book will hold verified, source-backed facts rather than
   guesses.
 - Do not overwrite an existing file or create a deterministic search index.
