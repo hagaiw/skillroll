@@ -12,6 +12,7 @@ from agents import (
     FunctionTool,
     ModelSettings,
     OpenAIChatCompletionsModel,
+    OpenAIResponsesModel,
     Runner,
     set_tracing_disabled,
 )
@@ -21,7 +22,7 @@ from openai import AsyncOpenAI
 from skillroll.diagnostics import JSONValue
 from skillroll.inference.profile import ResolvedInference
 from skillroll.inference.transport import ModelUsage, ToolCall
-from skillroll.models import InferenceLimits
+from skillroll.models import InferenceLimits, InferenceWire
 from skillroll.runtime.execution import (
     SdkExecution,
     ToolInputRecorder,
@@ -52,6 +53,21 @@ WORLD_ACTION_SCHEMA: dict[str, Any] = {
 # Some models leak their native tool-call markup into a JSON string value, e.g.
 # '{"command": "ls"}\n<parameter name="tool_name">Bash'.
 _PARAMETER_TAG = re.compile(r'\s*</?parameter(?: name="(\w+)")?>\s*')
+
+
+def model_class(
+    wire: InferenceWire,
+) -> type[OpenAIChatCompletionsModel | OpenAIResponsesModel]:
+    """Choose the SDK model class for one wire.
+
+    Execution reads the same profile.wire the compatibility transport reads, so a
+    provider that accepted preflight on one endpoint is never asked to execute on
+    the other. Keep this in step with transport.transport_for_profile. The names
+    resolve at call time so tests can substitute the SDK classes.
+    """
+    if wire is InferenceWire.RESPONSES:
+        return OpenAIResponsesModel
+    return OpenAIChatCompletionsModel
 
 
 def _json_object(value: Mapping[str, object]) -> Mapping[str, JSONValue]:
@@ -176,15 +192,21 @@ class AgentsSdkRuntime:
             max_retries=0,
         )
         try:
-            model = OpenAIChatCompletionsModel(profile.model, openai_client=client)
+            model = model_class(profile.wire)(profile.model, openai_client=client)
             agent = Agent(
                 name="SkillRoll evaluated skill",
                 instructions=instructions,
                 model=model,
                 tools=[world_action_tool(world_action, calls)],
                 model_settings=ModelSettings(
+                    # The SDK renames this to max_output_tokens on the Responses
+                    # wire, so one setting covers both models.
                     max_tokens=limits.max_output_tokens,
                     parallel_tool_calls=False,
+                    # Same provider-specific parameters the compatibility
+                    # transport sends, so execution cannot be rejected by a
+                    # provider that already accepted preflight.
+                    extra_body=dict(profile.extra_body) or None,
                 ),
             )
             result = await Runner.run(agent, user_input, max_turns=limits.max_turns)

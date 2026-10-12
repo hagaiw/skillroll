@@ -14,7 +14,7 @@ from agents.tool_context import ToolContext
 from skillroll.artifacts.records import transcript_bytes
 from skillroll.inference.profile import ResolvedInference, SecretValue
 from skillroll.inference.transport import ChatRequest, ChatResponse, ChatTransport
-from skillroll.models import InferenceLimits
+from skillroll.models import InferenceLimits, InferenceWire
 from skillroll.runtime import agents_sdk
 from skillroll.world.bundle import BundleIndex
 from skillroll.world.session import WorldSession
@@ -265,3 +265,75 @@ def test_handler_without_recorder_and_handler_errors_reach_the_model(
         "Error: world unavailable"
     )
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("wire", "model_attr"),
+    [
+        (InferenceWire.CHAT_COMPLETIONS, "OpenAIChatCompletionsModel"),
+        (InferenceWire.RESPONSES, "OpenAIResponsesModel"),
+    ],
+)
+def test_lenient_decoder_is_active_on_both_wires(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    wire: InferenceWire,
+    model_attr: str,
+) -> None:
+    """Both wires hand the model the same lenient world_action tool."""
+    world, _ = session(tmp_path)
+    built: list[str] = []
+    outputs: list[str] = []
+
+    class Client:
+        def __init__(self, **_: object) -> None:
+            pass
+
+        async def close(self) -> None:
+            pass
+
+    class Agent:
+        def __init__(self, **kwargs: Any) -> None:
+            self.tools = kwargs["tools"]
+
+    class Runner:
+        @staticmethod
+        async def run(agent: Any, _: str, **__: object) -> object:
+            (tool,) = agent.tools
+            context = ToolContext(
+                None,
+                tool_name="world_action",
+                tool_call_id="call-1",
+                tool_arguments=MARKUP_LEAK,
+            )
+            outputs.append(str(await tool.on_invoke_tool(context, MARKUP_LEAK)))
+            return SimpleNamespace(final_output="finished")
+
+    def record_model(*_: object, **__: object) -> object:
+        built.append(model_attr)
+        return object()
+
+    monkeypatch.setattr(agents_sdk, "AsyncOpenAI", Client)
+    monkeypatch.setattr(agents_sdk, "Agent", Agent)
+    monkeypatch.setattr(agents_sdk, "Runner", Runner)
+    monkeypatch.setattr(agents_sdk, "set_tracing_disabled", lambda _: None)
+    monkeypatch.setattr(agents_sdk, "ModelSettings", lambda **kwargs: kwargs)
+    monkeypatch.setattr(agents_sdk, model_attr, record_model)
+    selected = ResolvedInference(
+        "https://example.test/v1",
+        "cheap-model",
+        SecretValue("test-secret"),
+        InferenceLimits(4, 30, 128),
+        wire=wire,
+    )
+    result = asyncio.run(
+        agents_sdk.AgentsSdkRuntime().run(
+            "instructions", "input", selected, InferenceLimits(), world
+        )
+    )
+    assert built == [model_attr]
+    assert outputs == ["simulated"]
+    assert [(call.name, call.arguments) for call in result.tool_calls] == [
+        ("Bash", {"command": CLONE})
+    ]
+    assert world.events[0].source == "recovered"

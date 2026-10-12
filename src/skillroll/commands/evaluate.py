@@ -72,9 +72,9 @@ StoreFactory = Callable[[Path, SecretRedactor], ArtifactStore]
 
 
 def _transport(profile: ResolvedInference) -> ChatTransport:
-    from skillroll.inference.transport import OpenAIChatTransport
+    from skillroll.inference.transport import transport_for_profile
 
-    return OpenAIChatTransport.from_profile(profile)
+    return transport_for_profile(profile)
 
 
 def _executor(profile: ResolvedInference) -> SkillExecutor:

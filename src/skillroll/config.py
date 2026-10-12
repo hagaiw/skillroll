@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from math import isfinite
 from pathlib import Path, PurePosixPath
+from typing import cast
 from urllib.parse import urlparse
 
-from skillroll.diagnostics import Diagnostic, SourceLocation
+from skillroll.diagnostics import Diagnostic, JSONValue, SourceLocation
 from skillroll.models import (
     GuardId,
     GuardSettings,
     InferenceLimits,
     InferenceSettings,
+    InferenceWire,
     ModelPricing,
     ModelProfile,
     ParsedResult,
@@ -27,7 +30,17 @@ _ROOT_KEYS = frozenset(
 )
 _GUARD_KEYS = frozenset({"disabled"})
 _INFERENCE_KEYS = frozenset(
-    {"base_url", "model", "api_key_env", "limits", "profiles", "default_profile"}
+    {
+        "base_url",
+        "model",
+        "api_key_env",
+        "limits",
+        "profiles",
+        "default_profile",
+        "extra_body",
+        "wire",
+        "supports_temperature",
+    }
 )
 _LIMIT_KEYS = frozenset({"max_turns", "timeout_seconds", "max_output_tokens"})
 _PROFILE_KEYS = frozenset({"purpose", "models"})
@@ -152,6 +165,96 @@ def _model_profiles(value: object) -> dict[str, ModelProfile] | None:
             return None
         parsed[name] = ModelProfile(purpose.strip(), normalized_models)
     return parsed
+
+
+# Keys that skillroll controls directly inside the request body. Allowing them in
+# extra_body would let a config silently override the harness's own typed
+# parameters in unpredictable ways. The set covers both wires, so the guarantee
+# holds whichever endpoint a repository selects: `messages`/`max_tokens`/
+# `response_format` belong to Chat Completions, `input`/`max_output_tokens`/`text`
+# to Responses.
+_EXTRA_BODY_RESERVED_KEYS = frozenset(
+    {
+        "model",
+        "messages",
+        "input",
+        "tools",
+        "tool_choice",
+        "max_tokens",
+        "max_completion_tokens",
+        "max_output_tokens",
+        "stream",
+        "response_format",
+        "text",
+        "temperature",
+    }
+)
+_EXTRA_BODY_MAX_DEPTH = 4
+_EXTRA_BODY_MAX_BYTES = 8192
+
+
+def _extra_body_value(value: object, depth: int) -> bool:
+    """Return True iff *value* is a JSON-ish scalar or bounded nested structure."""
+    if depth > _EXTRA_BODY_MAX_DEPTH:
+        return False
+    if isinstance(value, float):
+        return isfinite(value)
+    if value is None or isinstance(value, str | bool | int):
+        return True
+    if isinstance(value, list):
+        return all(_extra_body_value(item, depth + 1) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(k, str) and k and _extra_body_value(v, depth + 1)
+            for k, v in value.items()
+        )
+    return False
+
+
+def _extra_body(value: object) -> dict[str, JSONValue] | None:
+    """Validate an optional [inference.extra_body] table.
+
+    Returns an empty dict when the section is absent, a validated dict of
+    provider-specific parameters on success, or None on any validation error.
+    Reserved keys (those skillroll already sets in the request body) are
+    rejected to prevent accidental harness hijacking.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        return None
+    if not value:
+        # An empty table is valid; nothing to forward.
+        return {}
+    for key in value:
+        if not isinstance(key, str) or not key:
+            return None
+        if key in _EXTRA_BODY_RESERVED_KEYS:
+            return None
+    for v in value.values():
+        if not _extra_body_value(v, depth=1):
+            return None
+    # Every key and value was validated above, so serialisation cannot fail.
+    serialized = json.dumps(value)
+    if len(serialized.encode("utf-8")) > _EXTRA_BODY_MAX_BYTES:
+        return None
+    return cast(dict[str, JSONValue], dict(value))
+
+
+def _inference_wire(value: object) -> InferenceWire | None:
+    """Validate the optional inference.wire setting.
+
+    Returns the Chat Completions default when the key is absent, the selected
+    wire on success, or None on any validation error.
+    """
+    if value is None:
+        return InferenceWire.CHAT_COMPLETIONS
+    if not isinstance(value, str):
+        return None
+    try:
+        return InferenceWire(value)
+    except ValueError:
+        return None
 
 
 def _pricing(value: object) -> PricingSettings | None:
@@ -293,6 +396,9 @@ def load_config(repository_root: Path) -> ParsedResult[SkillRollConfig]:
         limits = _inference_limits(inference_value.get("limits"))
         profiles = _model_profiles(inference_value.get("profiles"))
         default_profile = inference_value.get("default_profile")
+        extra_body = _extra_body(inference_value.get("extra_body"))
+        wire = _inference_wire(inference_value.get("wire"))
+        supports_temperature = inference_value.get("supports_temperature", True)
         valid_model = model is None or (
             isinstance(model, str)
             and bool(model.strip())
@@ -310,6 +416,9 @@ def load_config(repository_root: Path) -> ParsedResult[SkillRollConfig]:
             or _ENVIRONMENT_NAME.fullmatch(api_key_env) is None
             or limits is None
             or profiles is None
+            or extra_body is None
+            or wire is None
+            or not isinstance(supports_temperature, bool)
             or (
                 default_profile is not None
                 and (
@@ -324,7 +433,8 @@ def load_config(repository_root: Path) -> ParsedResult[SkillRollConfig]:
                 config_path,
                 "Inference settings need a safe HTTPS URL (or local test URL), "
                 "a model or named model profiles, an environment-variable name, "
-                "and valid limits.",
+                "valid limits, and, if present, wire set to chat_completions or "
+                "responses.",
             )
         if model is None:
             assert profiles
@@ -338,6 +448,9 @@ def load_config(repository_root: Path) -> ParsedResult[SkillRollConfig]:
             limits,
             profiles,
             default_profile,
+            extra_body,
+            wire,
+            supports_temperature,
         )
     pricing = _pricing(data.get("pricing"))
     if data.get("pricing") is not None and pricing is None:

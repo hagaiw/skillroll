@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
@@ -11,6 +12,19 @@ from skillroll.diagnostics import Diagnostic, JSONValue, SourceLocation
 
 type GuardId = Literal["SCG2001"]
 type FindingDisposition = Literal["blocking", "advisory"]
+
+
+class InferenceWire(StrEnum):
+    """Which OpenAI-compatible endpoint SkillRoll speaks to.
+
+    Chat Completions remains the default because every configured repository was
+    written against it. Some reasoning models reject function tools on that
+    endpoint and accept them only on Responses, so the wire is a repository-level
+    choice rather than a per-request one.
+    """
+
+    CHAT_COMPLETIONS = "chat_completions"
+    RESPONSES = "responses"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +44,9 @@ class InferenceSettings:
     limits: InferenceLimits = InferenceLimits()
     profiles: Mapping[str, ModelProfile] = field(default_factory=dict)
     default_profile: str | None = None
+    extra_body: Mapping[str, JSONValue] = field(default_factory=dict)
+    wire: InferenceWire = InferenceWire.CHAT_COMPLETIONS
+    supports_temperature: bool = True
 
 
 @dataclass(frozen=True, slots=True)

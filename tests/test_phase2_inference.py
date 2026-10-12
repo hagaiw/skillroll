@@ -1067,6 +1067,7 @@ def test_remaining_transport_and_execution_error_paths(tmp_path: Path) -> None:
             ),
         )
         object.__setattr__(fake, "_redactor", SecretRedactor(profile().api_key))
+        object.__setattr__(fake, "_profile", profile())
         return fake
 
     request = ChatRequest("model", (transport_module.ChatMessage("user", "hi"),))
