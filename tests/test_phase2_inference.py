@@ -901,7 +901,7 @@ def test_transport_constructor_and_agents_sdk_adapter_are_explicit(
                 input_tokens=10,
                 output_tokens=4,
                 total_tokens=14,
-                input_token_details=SimpleNamespace(cached_tokens=3),
+                input_tokens_details=SimpleNamespace(cached_tokens=3),
             )
         )
     ) == ModelUsage(10, 4, 14, 3)
@@ -1111,4 +1111,15 @@ def test_remaining_transport_and_execution_error_paths(tmp_path: Path) -> None:
     assert (
         cancelled.failure is not None
         and cancelled.failure.kind is InferenceFailureKind.CANCELLED
+    )
+
+
+def test_response_usage_reads_cached_tokens_from_real_agents_sdk_usage() -> None:
+    """The SDK names the field input_tokens_details, so cache reads must be counted."""
+    from agents.usage import Usage
+
+    usage = Usage(input_tokens=100, output_tokens=20, total_tokens=120)
+    usage.input_tokens_details.cached_tokens = 64
+    assert agents_sdk._response_usage(SimpleNamespace(usage=usage)) == ModelUsage(
+        100, 20, 120, 64
     )

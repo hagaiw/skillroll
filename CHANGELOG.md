@@ -11,6 +11,10 @@ Notable user-visible changes are recorded here. The format follows
   `<parameter>` tool-call markup instead of failing with a generic SDK error,
   returns a specific error for input it cannot recover, and records both cases
   in `transcript.jsonl` with `source` `recovered` or `rejected`.
+- Execution usage read cached input tokens from `input_token_details`, but the
+  Agents SDK names the field `input_tokens_details`, so `cache_read_tokens`
+  was always empty and cached input was priced as fresh input. It now reads the
+  real field.
 
 ## [0.1.2] - 2026-08-23
 

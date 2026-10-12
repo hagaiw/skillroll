@@ -222,7 +222,7 @@ def _response_usage(response: object) -> ModelUsage | None:
     usage = getattr(response, "usage", None)
     if usage is None:
         return None
-    details = getattr(usage, "input_token_details", None)
+    details = getattr(usage, "input_tokens_details", None)
     if details is None:
         details = getattr(usage, "prompt_tokens_details", None)
     cache_read_tokens = getattr(details, "cached_tokens", None)
