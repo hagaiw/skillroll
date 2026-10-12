@@ -5,6 +5,13 @@ Notable user-visible changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `world_action` now recovers string-encoded `arguments` and leaked
+  `<parameter>` tool-call markup instead of failing with a generic SDK error,
+  returns a specific error for input it cannot recover, and records both cases
+  in `transcript.jsonl` with `source` `recovered` or `rejected`.
+
 ## [0.1.2] - 2026-08-23
 
 ### Changed

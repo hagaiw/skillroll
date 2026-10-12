@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from skillroll.diagnostics import JSONValue
 from skillroll.inference.profile import (
@@ -28,6 +28,13 @@ class WorldActionHandler(Protocol):
     async def __call__(
         self, tool_name: str, arguments: Mapping[str, JSONValue]
     ) -> str: ...
+
+
+@runtime_checkable
+class ToolInputRecorder(Protocol):
+    """Optional handler capability for recording rejected or repaired inputs."""
+
+    def record_tool_input(self, source: str, raw: str, reason: str) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)

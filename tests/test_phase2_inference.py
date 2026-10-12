@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
@@ -836,10 +837,6 @@ def test_transport_constructor_and_agents_sdk_adapter_are_explicit(
     def fake_trace(disabled: bool) -> None:
         seen["tracing"] = disabled
 
-    def fake_tool(**kwargs: object) -> Any:
-        seen["function_tool"] = kwargs
-        return lambda function: function
-
     class Agent:
         def __init__(self, **kwargs: object) -> None:
             self.tools = kwargs["tools"]
@@ -849,8 +846,14 @@ def test_transport_constructor_and_agents_sdk_adapter_are_explicit(
         @staticmethod
         async def run(agent: Any, _: str, **kwargs: object) -> object:
             seen["runner"] = kwargs
-            value = await agent.tools[0](
-                "read_file", {"path": "x", "options": {"follow": True}}
+            value = await agent.tools[0].on_invoke_tool(
+                None,
+                json.dumps(
+                    {
+                        "tool_name": "read_file",
+                        "arguments": {"path": "x", "options": {"follow": True}},
+                    }
+                ),
             )
             assert value == "simulated"
             return SimpleNamespace(
@@ -869,7 +872,6 @@ def test_transport_constructor_and_agents_sdk_adapter_are_explicit(
     monkeypatch.setattr(agents_sdk, "AsyncOpenAI", Client)
     monkeypatch.setattr(agents_sdk, "Agent", Agent)
     monkeypatch.setattr(agents_sdk, "Runner", Runner)
-    monkeypatch.setattr(agents_sdk, "function_tool", fake_tool)
     monkeypatch.setattr(agents_sdk, "set_tracing_disabled", fake_trace)
     monkeypatch.setattr(
         agents_sdk, "OpenAIChatCompletionsModel", lambda *args, **kwargs: object()
@@ -903,18 +905,9 @@ def test_transport_constructor_and_agents_sdk_adapter_are_explicit(
             )
         )
     ) == ModelUsage(10, 4, 14, 3)
-    assert seen["function_tool"] == {
-        "name_override": "world_action",
-        "description_override": (
-            "Request one intended action and receive its observed result. "
-            'For a bundled file read, use tool_name="Read" with arguments '
-            '{"path":"references/file.md"}. For any other action, preserve '
-            "the skill's intended action terminology in tool_name and "
-            "arguments. The action name records intent; it does not need a "
-            "SkillRoll-specific spelling. Do not invent another tool."
-        ),
-        "strict_mode": False,
-    }
+    (tool,) = cast(tuple[Any], seen["agent"]["tools"])  # type: ignore[index]
+    assert tool.name == "world_action"
+    assert tool.description == agents_sdk.WORLD_ACTION_DESCRIPTION
     assert seen["tracing"] is True
     assert seen["runner"] == {"max_turns": 2}
     with pytest.raises(ValueError):
@@ -923,11 +916,14 @@ def test_transport_constructor_and_agents_sdk_adapter_are_explicit(
     class InvalidRunner:
         @staticmethod
         async def run(agent: Any, _: str, **__: object) -> object:
-            await agent.tools[0]("", {})
-            return SimpleNamespace(final_output="never")
+            message = await agent.tools[0].on_invoke_tool(
+                None, json.dumps({"tool_name": "x" * 201, "arguments": {}})
+            )
+            assert "1 to 200 characters" in message
+            return SimpleNamespace(final_output="handled")
 
     monkeypatch.setattr(agents_sdk, "Runner", InvalidRunner)
-    with pytest.raises(ValueError):
+    assert (
         asyncio.run(
             agents_sdk.AgentsSdkRuntime().run(
                 "instructions",
@@ -936,7 +932,9 @@ def test_transport_constructor_and_agents_sdk_adapter_are_explicit(
                 InferenceLimits(2, 10, 256),
                 world_action,
             )
-        )
+        ).final_output
+        == "handled"
+    )
 
     class BlankRunner:
         @staticmethod
