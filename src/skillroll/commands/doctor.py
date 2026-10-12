@@ -28,9 +28,9 @@ TransportFactory = Callable[[ResolvedInference], "ChatTransport"]
 
 def _default_transport(profile: ResolvedInference) -> ChatTransport:
     """Delay the optional HTTP/SDK import until configuration needs it."""
-    from skillroll.inference.transport import OpenAIChatTransport
+    from skillroll.inference.transport import transport_for_profile
 
-    return OpenAIChatTransport.from_profile(profile)
+    return transport_for_profile(profile)
 
 
 def _failure_result(failure: InferenceFailure) -> CommandResult:

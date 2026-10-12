@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import quote
 
-from skillroll.models import InferenceLimits, InferenceSettings
+from skillroll.diagnostics import JSONValue
+from skillroll.models import InferenceLimits, InferenceSettings, InferenceWire
 
 MAX_FAILURE_DETAILS = 3
 MAX_FAILURE_DETAIL_BYTES = 1024
@@ -131,6 +132,13 @@ class ResolvedInference:
     limits: InferenceLimits
     profile_name: str | None = None
     profile_purpose: str | None = None
+    extra_body: Mapping[str, JSONValue] = field(default_factory=dict)
+    # The single source of truth for the wire, so the compatibility transport and
+    # the execution runtime cannot disagree about which endpoint to call.
+    wire: InferenceWire = InferenceWire.CHAT_COMPLETIONS
+    # SkillRoll asks for temperature 0 when simulating the world and judging.
+    # Reasoning models reject the parameter outright, so a repository can say so.
+    supports_temperature: bool = True
 
 
 def _candidate_models(
@@ -204,12 +212,15 @@ def resolve_inference_candidates(
     return (
         tuple(
             ResolvedInference(
-                settings.base_url,
-                model,
-                secret,
-                settings.limits,
-                candidate_profile,
-                purpose,
+                base_url=settings.base_url,
+                model=model,
+                api_key=secret,
+                limits=settings.limits,
+                profile_name=candidate_profile,
+                profile_purpose=purpose,
+                extra_body=settings.extra_body,
+                wire=settings.wire,
+                supports_temperature=settings.supports_temperature,
             )
             for model, candidate_profile, purpose in candidates
         ),

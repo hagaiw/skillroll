@@ -19,6 +19,8 @@ from skillroll.world.model import HistoryItem, WorldModelError, model_action
 from skillroll.world.rules import canonical_json, matching_rule
 
 MAX_WORLD_ACTIONS_PER_CASE = 64
+TOOL_INPUT_SOURCES = frozenset({"rejected", "recovered"})
+_MAX_RECORDED_INPUT_CHARS = 2048
 
 
 class WorldActionError(Exception):
@@ -122,6 +124,15 @@ class WorldSession:
         )
         return result
 
+    def record_tool_input(self, source: str, raw: str, reason: str) -> None:
+        """Record a malformed world_action input that was rejected or repaired."""
+        self._append(
+            "world_action",
+            {"raw": raw[:_MAX_RECORDED_INPUT_CHARS]},
+            reason,
+            source,
+        )
+
     async def __call__(self, tool_name: str, arguments: Mapping[str, JSONValue]) -> str:
         """Respond in strict precedence and prevent concurrent history races."""
         async with self._lock:
@@ -150,6 +161,7 @@ class WorldSession:
             history = tuple(
                 HistoryItem(item.tool_name, item.arguments, item.result)
                 for item in self._events
+                if item.source not in TOOL_INPUT_SOURCES
             )
             try:
                 reply = await model_action(

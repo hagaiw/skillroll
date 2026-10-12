@@ -5,6 +5,35 @@ Notable user-visible changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `[inference.extra_body]` TOML table: key/value pairs forwarded to the
+  OpenAI-compatible SDK's `extra_body=` kwarg on every completion call.
+  Useful for reasoning models that require gateway-specific parameters (e.g.
+  `reasoning_effort = "none"`) before they accept function tools.
+- `inference.wire` setting, either `"chat_completions"` (the default, unchanged
+  behaviour) or `"responses"`. On `"responses"` SkillRoll talks to
+  `/v1/responses` for compatibility, world simulation and judging, and executes
+  the skill through the Agents SDK's `OpenAIResponsesModel`. Some reasoning
+  models refuse function tools on Chat Completions unless reasoning is disabled
+  and accept them only on Responses, so this keeps reasoning available.
+- `inference.supports_temperature` setting, default `true` (unchanged
+  behaviour). Set it to `false` for a model that rejects `temperature`
+  outright — several reasoning models do — and SkillRoll omits the parameter
+  from world simulation and judging instead of failing the run.
+
+### Fixed
+
+- `world_action` now recovers string-encoded `arguments` and leaked
+  `<parameter>` tool-call markup instead of failing with a generic SDK error,
+  returns a specific error for input it cannot recover, and records both cases
+  in `transcript.jsonl` with `source` `recovered` or `rejected`.
+  The decoder applies on both the Chat Completions and Responses wires.
+- Execution usage read cached input tokens from `input_token_details`, but the
+  Agents SDK names the field `input_tokens_details`, so `cache_read_tokens`
+  was always empty and cached input was priced as fresh input. It now reads the
+  real field.
+
 ## [0.1.2] - 2026-08-23
 
 ### Changed
