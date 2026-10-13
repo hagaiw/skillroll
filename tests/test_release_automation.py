@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -136,8 +137,22 @@ def test_offline_validation_only_accepts_pass_or_incomplete(status: int) -> None
         for s in workflow()["jobs"]["build"]["steps"]
         if s.get("name") == "Validate eval structure without repository commands"
     )
+    bash = "bash"
+    if os.name == "nt":
+        # PATH may resolve bash to the WSL launcher without a distribution.
+        # GitHub's Windows runners provide a working Git Bash alongside Git.
+        git = shutil.which("git")
+        assert git is not None, "Git for Windows is required"
+        bash = str(Path(git).resolve().parent.parent / "bin" / "bash.exe")
+        assert Path(bash).is_file(), f"Git Bash not found: {bash}"
     result = subprocess.run(
-        ["bash", "-e", "-c", f"uv() {{ return {status}; }}\n" + step["run"]],
+        [bash, "--noprofile", "--norc", "-e"],
+        input=f"uv() {{ return {status}; }}\n" + step["run"],
+        text=True,
+        capture_output=True,
         check=False,
     )
-    assert result.returncode == (0 if status in (0, 2) else status)
+    assert result.returncode == (0 if status in (0, 2) else status), (
+        result.stdout,
+        result.stderr,
+    )
