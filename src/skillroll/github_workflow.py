@@ -50,6 +50,11 @@ on:
         required: false
         default: false
         type: boolean
+      concurrency:
+        description: Maximum simultaneous independent cases (1-16)
+        required: false
+        default: 4
+        type: string
       run_repository_checks:
         description: Run repository-declared commands in a separate secretless job
         required: true
@@ -70,6 +75,8 @@ concurrency:
 jobs:
   validate:
     if: github.event_name == 'pull_request'
+    outputs:
+      selected-case-count: ${{{{ steps.validate.outputs.selected-case-count }}}}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -99,6 +106,7 @@ jobs:
 
   live-eval:
     if: >-
+      needs.validate.outputs.selected-case-count != '0' &&
       vars.SKILLROLL_LIVE_EVAL == 'true' &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -121,6 +129,7 @@ jobs:
           scope: changed
           base-sha: ${{{{ github.event.pull_request.base.sha }}}}
           head-sha: ${{{{ github.event.pull_request.head.sha }}}}
+          concurrency: ${{{{ vars.SKILLROLL_EVAL_CONCURRENCY || '4' }}}}
           samples: 1
           with-skill-control: false
           run-commands: false
@@ -160,6 +169,7 @@ jobs:
           mode: eval
           scope: ${{{{ inputs.scope }}}}
           selection-path: ${{{{ inputs.selection_path }}}}
+          concurrency: ${{{{ inputs.concurrency }}}}
           samples: ${{{{ inputs.samples }}}}
           with-skill-control: ${{{{ inputs.with_skill_control }}}}
           run-commands: false

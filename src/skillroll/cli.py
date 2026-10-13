@@ -220,6 +220,13 @@ def _parser() -> SkillRollParser:
         help="Model profile to use.",
     )
     evaluate_parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Evaluate up to N cases concurrently (1-16; requires no --run-commands).",
+    )
+    evaluate_parser.add_argument(
         "--samples",
         type=int,
         default=1,
@@ -374,6 +381,7 @@ def main(
                         run_commands=namespace.run_commands,
                         model_profile=namespace.model_profile,
                         samples=namespace.samples,
+                        concurrency=namespace.concurrency,
                         with_skill_control=namespace.with_skill_control,
                     )
                 else:

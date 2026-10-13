@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Never
 
@@ -16,6 +17,7 @@ from skillroll.github import (
     valid_reviewed_ref,
     write_github_report,
 )
+from skillroll.impact import load_impact_policy
 from skillroll.outcomes import Outcome
 from skillroll.validation import (
     command_result,
@@ -32,7 +34,7 @@ class _Parser(argparse.ArgumentParser):
 def _parser() -> _Parser:
     parser = _Parser(prog="skillroll GitHub Action")
     parser.add_argument(
-        "--mode", choices=("validate", "eval", "validate-ref"), required=True
+        "--mode", choices=("plan", "validate", "eval", "validate-ref"), required=True
     )
     parser.add_argument(
         "--scope", choices=("changed", "all", "skill", "case"), required=True
@@ -43,6 +45,8 @@ def _parser() -> _Parser:
     parser.add_argument("--reviewed-ref")
     parser.add_argument("--run-commands", choices=("true", "false"), default="false")
     parser.add_argument("--samples", type=int, default=1)
+    parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--impact-policy")
     parser.add_argument(
         "--with-skill-control", choices=("true", "false"), default="false"
     )
@@ -72,6 +76,8 @@ def _error(message: str) -> CommandResult:
 def _selection(
     args: argparse.Namespace, root: Path
 ) -> tuple[ChangedSelection | None, CommandResult | None]:
+    if args.impact_policy is not None and args.scope != "changed":
+        return None, _error("Impact policy is only supported with changed scope.")
     if args.scope == "changed":
         if not args.base_sha or not args.head_sha:
             return None, _error("Changed scope needs both base-sha and head-sha.")
@@ -82,7 +88,23 @@ def _selection(
         diff = git_changes(root, args.base_sha, args.head_sha)
         if diff.fallback_reason is not None:
             return ChangedSelection("all", report.cases, diff.fallback_reason), None
-        return select_changed(report, diff.changes), None
+        try:
+            policy = (
+                None
+                if args.impact_policy is None
+                else load_impact_policy(root, args.impact_policy)
+            )
+        except ValueError as error:
+            return None, _error(str(error))
+        if policy is not None:
+            assert args.impact_policy is not None
+            policy = replace(policy, full=(*policy.full, args.impact_policy))
+        return (
+            select_changed(report, diff.changes)
+            if policy is None
+            else select_changed(report, diff.changes, policy)
+        ), None
+
     if args.scope in {"skill", "case"}:
         if not args.selection_path:
             return None, _error("This selected scope needs a skill or eval-case path.")
@@ -130,6 +152,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = _error("Sample count must be between 1 and 10.")
         print(render_json(result), end="")
         return result.outcome.exit_code
+    if not 1 <= args.concurrency <= 16:
+        result = _error("Concurrency must be an integer from 1 to 16.")
+        print(render_json(result), end="")
+        return result.outcome.exit_code
     root = Path.cwd()
     selected: ChangedSelection | None = None
     if args.mode == "validate-ref":
@@ -153,6 +179,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         pass
     elif failure is not None:
         result = failure
+    elif args.mode == "plan":
+        assert selected is not None
+        result = CommandResult(
+            Outcome.PASS,
+            selected.reason,
+            data={
+                "selected_cases": tuple(
+                    case.identity.as_posix() for case in selected.cases
+                ),
+                "scope": selected.scope,
+            },
+        )
     elif selected is not None and selected.scope == "none":
         result = CommandResult(
             Outcome.PASS, "No selected skill or eval case needs a model evaluation."
@@ -170,6 +208,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             selected_cases=None if selected is None else selected.cases,
             samples=args.samples,
             with_skill_control=args.with_skill_control == "true",
+            concurrency=args.concurrency,
         )
     annotations = write_github_report(
         result,

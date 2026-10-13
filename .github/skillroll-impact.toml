@@ -1,0 +1,21 @@
+schema_version = 1
+# These modules shape setup, publishing, and presentation; their behavior is
+# covered by offline tests rather than the simulated skill-execution suite.
+offline = [
+  "docs/**", "tests/**", "README.md", "AGENTS.md", "PRINCIPLES.md", "LICENSE",
+  ".github/CONTRIBUTING.md", ".github/SECURITY.md", ".github/SUPPORT.md",
+  ".github/workflows/ci.yml", ".github/workflows/release.yml",
+  "src/skillroll/release.py", "src/skillroll/github_workflow.py",
+  "src/skillroll/marketplace.py",
+  "src/skillroll/initialization/**", "src/skillroll/commands/initialize.py",
+  "src/skillroll/commands/create_case.py", "src/skillroll/_assets/**",
+  "tools/check_function_coverage.py", "tools/release_rehearsal.py",
+]
+full = [
+  ".github/skillroll-impact.toml", ".github/workflows/skillroll.yml",
+  "plugins/harness-prompts/skills/*/references/**",
+]
+# Mirrors the dependency declarations in these plugins' plugin.json files.
+[[dependencies]]
+changed = "plugins/flow-runner/**"
+affected = ["plugins/change-review-flow/**", "plugins/blind-skillroll-evaluation/**"]
