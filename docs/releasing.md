@@ -61,7 +61,8 @@ The workflow attests the built artifacts, publishes those artifacts to PyPI
 through the protected `pypi` environment, then creates `vVERSION` and a GitHub
 release with generated notes. Release candidates are marked as prereleases.
 Publication runs are serialized; a running release is never cancelled by a new
-request. GitHub may replace an older pending run with a newer pending run, so
+request. Rehearsals and closed PRs that do not publish use separate groups, so
+they cannot displace a queued publication. GitHub may replace an older pending run with a newer pending run, so
 check the Actions queue when merging multiple release PRs close together.
 
 The GitHub release is created with `GITHUB_TOKEN`, so it does not trigger another

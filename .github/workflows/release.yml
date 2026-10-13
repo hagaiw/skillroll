@@ -19,7 +19,15 @@ on:
 
 # Serialize publication without cancelling a release already in progress.
 concurrency:
-  group: skillroll-release
+  group: >-
+    skillroll-release-${{
+      (github.event_name == 'release' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.merged == true &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'release')))
+      && 'publish' || github.run_id }}
   cancel-in-progress: false
 
 permissions:

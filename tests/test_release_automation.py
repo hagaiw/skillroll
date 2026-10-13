@@ -156,3 +156,49 @@ def test_offline_validation_only_accepts_pass_or_incomplete(status: int) -> None
         result.stdout,
         result.stderr,
     )
+
+
+@pytest.mark.parametrize(
+    ("event", "publish", "merged", "same_repo", "labeled", "expected"),
+    [
+        ("release", False, False, False, False, "publish"),
+        ("workflow_dispatch", True, False, False, False, "publish"),
+        ("workflow_dispatch", False, False, False, False, "123"),
+        ("pull_request", False, True, True, True, "publish"),
+        ("pull_request", False, False, True, True, "123"),
+        ("pull_request", False, True, False, True, "123"),
+        ("pull_request", False, True, True, False, "123"),
+    ],
+)
+def test_only_publications_share_the_release_queue(
+    event: str,
+    publish: bool,
+    merged: bool,
+    same_repo: bool,
+    labeled: bool,
+    expected: str,
+) -> None:
+    # Evaluate this workflow's boolean-only expression using Python's equivalent
+    # and/or operators. Ineligible events must not evict a queued publication.
+    group = workflow()["concurrency"]["group"]
+    prefix, expression = group.split("${{", 1)
+    expression = expression.rsplit("}}", 1)[0]
+    replacements = {
+        "contains(github.event.pull_request.labels.*.name, 'release')": repr(labeled),
+        "github.event.pull_request.head.repo.full_name": repr(
+            "owner/repo" if same_repo else "fork/repo"
+        ),
+        "github.event.pull_request.merged": repr(merged),
+        "github.event_name": repr(event),
+        "github.repository": repr("owner/repo"),
+        "github.run_id": repr("123"),
+        "inputs.publish": repr(publish),
+        "true": "True",
+        "&&": "and",
+        "||": "or",
+    }
+    for value, replacement in replacements.items():
+        expression = expression.replace(value, replacement)
+    assert prefix + str(eval(" ".join(expression.split()), {"__builtins__": {}})) == (
+        "skillroll-release-" + expected
+    )
