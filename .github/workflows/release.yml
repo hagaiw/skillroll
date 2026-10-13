@@ -4,6 +4,31 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the prepared version (otherwise rehearse only)
+        type: boolean
+        default: false
+      version:
+        description: Confirm the prepared version, without v (required to publish)
+        type: string
+        required: false
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+# Serialize publication without cancelling a release already in progress.
+concurrency:
+  group: >-
+    skillroll-release-${{
+      (github.event_name == 'release' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.merged == true &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'release')))
+      && 'publish' || github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -11,14 +36,24 @@ permissions:
 jobs:
   build:
     name: Build and rehearse
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'release'))
     runs-on: ubuntu-latest
     outputs:
       publishable: ${{ steps.evidence.outputs.publishable }}
+      publish: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+      tag: ${{ steps.candidate.outputs.tag }}
+      commit: ${{ steps.candidate.outputs.commit }}
+      prerelease: ${{ steps.candidate.outputs.prerelease }}
     steps:
       # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.release.tag_name || github.sha }}
+          ref: ${{ github.event.release.tag_name || github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       # astral-sh/setup-uv v10.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
@@ -27,7 +62,44 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --all-groups --locked
+      - id: candidate
+        name: Check release candidate identity
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+          SELECTED_REF: ${{ github.ref }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          uv run python - <<'PYTHON'
+          import os
+          import subprocess
+          from pathlib import Path
+          from skillroll.release import release_metadata, validate_release_files
+
+          metadata = release_metadata()
+          report = validate_release_files(Path('.'))
+          assert report.is_valid, report.problems
+          if os.environ['EVENT_NAME'] == 'workflow_dispatch' and os.environ['PUBLISH'] == 'true':
+              assert os.environ['SELECTED_REF'] == 'refs/heads/main', 'Publish from main only'
+              assert os.environ['REQUESTED_VERSION'] == metadata.version, 'Confirm the canonical version'
+          commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          tag = subprocess.run(['git', 'rev-parse', '--verify', f'refs/tags/{metadata.tag}^{{commit}}'], capture_output=True, text=True)
+          if os.environ['PUBLISH'] == 'true':
+              assert tag.returncode != 0 or tag.stdout.strip() == commit, 'Release tag already points at another commit'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'tag={metadata.tag}\ncommit={commit}\nprerelease={str(metadata.prerelease).lower()}\n')
+          PYTHON
       - run: uv run pytest -q
+      # Token-created releases do not trigger other workflows: validate here too.
+      - name: Validate eval structure without repository commands
+        shell: bash
+        run: |
+          status=0
+          uv run skillroll validate --all || status="$?"
+          # INCOMPLETE (2) is expected when declared commands are not run.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+            exit "$status"
+          fi
       - name: Verify the published tag matches the canonical version
         if: github.event_name == 'release'
         env:
@@ -51,7 +123,7 @@ jobs:
           set +e
           uv run python tools/release_rehearsal.py \
             --root . --artifacts dist --output release-evidence \
-            --commit "${GITHUB_SHA}"
+            --commit "$(git rev-parse HEAD)"
           status="$?"
           if [ "$status" -eq 0 ]; then
             echo "publishable=true" >> "$GITHUB_OUTPUT"
@@ -64,8 +136,14 @@ jobs:
           uv run python -c "from pathlib import Path; from skillroll.release
           import verify_artifact_manifest; assert not verify_artifact_manifest(
           Path('release-evidence/SHA256SUMS.json').read_bytes(), Path('dist'))"
+      - name: Fail blocked publication requests
+        if: >-
+          steps.evidence.outputs.publishable != 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.publish)
+        run: exit 1
       # actions/upload-artifact v7.0.1
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-evidence
           path: |
@@ -76,7 +154,7 @@ jobs:
   attest:
     name: Attest release artifacts
     if: >-
-      github.event_name == 'release' &&
+      needs.build.outputs.publish == 'true' &&
       needs.build.outputs.publishable == 'true'
     needs: build
     runs-on: ubuntu-latest
@@ -96,7 +174,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     if: >-
-      github.event_name == 'release' &&
+      needs.build.outputs.publish == 'true' &&
       needs.build.outputs.publishable == 'true'
     needs: [build, attest]
     runs-on: ubuntu-latest
@@ -112,3 +190,27 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
         with:
           packages-dir: dist
+
+  github-release:
+    name: Create GitHub release
+    if: github.event_name != 'release'
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # No checkout or repository code runs with the write token.
+      - name: Publish the exact built commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.build.outputs.commit }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+        shell: bash
+        run: |
+          args=(--target "$RELEASE_COMMIT" --generate-notes)
+          if [ "$PRERELEASE" = true ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" "${args[@]}"

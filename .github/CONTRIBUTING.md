@@ -47,3 +47,6 @@ should disclose the tool, review performed, and uncertain generated work.
 
 For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of opening a
 public issue.
+
+For version preparation and manual or merge-triggered publication, see
+[Releasing SkillRoll](../docs/releasing.md).

@@ -49,6 +49,8 @@ concurrency:
 jobs:
   validate:
     if: github.event_name == 'pull_request'
+    outputs:
+      live-required: ${{ steps.live-scope.outputs.required }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -56,6 +58,38 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - id: live-scope
+        name: Check whether this PR needs live evals
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: python
+        run: |
+          import os
+          import subprocess
+          from pathlib import PurePosixPath
+
+          # Repository-specific exemptions, not rules for downstream skills repos.
+          offline_files = {
+              ".github/workflows/ci.yml", ".github/workflows/release.yml",
+              ".github/CONTRIBUTING.md", ".github/SECURITY.md", ".github/SUPPORT.md",
+              "README.md", "AGENTS.md", "PRINCIPLES.md", "LICENSE",
+          }
+          result = subprocess.run(
+              ["git", "diff", "--name-only", "--no-renames", "-z",
+               os.environ["BASE_SHA"], os.environ["HEAD_SHA"]],
+              capture_output=True, check=True,
+          )
+          paths = result.stdout.decode("utf-8").split("\0")
+          paths = [path for path in paths if path]
+          required = any(
+              path not in offline_files
+              and PurePosixPath(path).parts[0] not in {"docs", "tests"}
+              for path in paths
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"required={str(required).lower()}\n")
+          print("Live evals required" if required else "Offline-only changes; live evals skipped")
       - id: validate
         uses: hagaiw/skillroll@v0.1.2
         continue-on-error: true
@@ -78,6 +112,7 @@ jobs:
 
   live-eval:
     if: >-
+      needs.validate.outputs.live-required == 'true' &&
       vars.SKILLROLL_LIVE_EVAL == 'true' &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&

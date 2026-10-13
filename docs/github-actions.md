@@ -63,3 +63,18 @@ output. Sampled runs also upload their parent report under
 repositories.
 
 See the [security model](security.md) and [results](results.md).
+
+## SkillRoll's own repository
+
+This repository keeps offline validation enabled for every PR, but skips automatic
+live evals when all changed paths are under `docs/` or `tests/`, or are the known
+release/CI workflows and top-level documentation listed in the workflow's
+`live-scope` step. These exemptions are specific to this repository and are not
+added to workflows generated for other repositories.
+
+Changes to `.github/workflows/skillroll.yml`, `action.yml`, source code, model
+configuration, dependencies, shared prompts, skills, or unknown paths still allow
+live evals under the owner/environment policy. Mixed PRs remain eligible and use
+the Action's conservative changed-case selection. Renames check both old and new
+paths, so moving a skill into an exempt directory cannot hide its removal.
+Manual evaluations and release validation remain available regardless of paths.
