@@ -13,7 +13,7 @@ def test_release_workflow_is_pinned_secretless_and_fail_closed() -> None:
 
     assert "release:\n    types: [published]" in workflow
     assert "workflow_dispatch:" in workflow
-    assert "pull_request" not in workflow
+    assert "pull_request:\n    types: [closed]\n    branches: [main]" in workflow
     assert "pull_request_target" not in workflow
     assert "push:" not in workflow
     assert "secrets." not in workflow
@@ -48,7 +48,9 @@ def test_release_workflow_keeps_credentials_and_inference_outside_build() -> Non
     attest = workflow.split("  attest:", maxsplit=1)[1].split(
         "  publish-pypi:", maxsplit=1
     )[0]
-    publish = workflow.split("  publish-pypi:", maxsplit=1)[1]
+    publish = workflow.split("  publish-pypi:", maxsplit=1)[1].split(
+        "  github-release:", maxsplit=1
+    )[0]
 
     assert "id-token: write" not in build
     assert "attestations: write" not in build
