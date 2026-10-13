@@ -13,12 +13,14 @@ def test_release_workflow_is_pinned_secretless_and_fail_closed() -> None:
 
     assert "release:\n    types: [published]" in workflow
     assert "workflow_dispatch:" in workflow
-    assert "pull_request:\n    types: [closed]\n    branches: [main]" in workflow
+    complete = (ROOT / ".github/workflows/new-release.yml").read_text()
+    assert "pull_request:\n    types: [closed]\n    branches: [main]" in complete
+    assert "pull_request:" not in workflow
     assert "pull_request_target" not in workflow
     assert "push:" not in workflow
     assert "secrets." not in workflow
     assert "PYPI_TOKEN" not in workflow
-    assert len(pins) == 8
+    assert len(pins) == 9
     assert "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6" in workflow
     assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in workflow
     assert "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in workflow

@@ -13,10 +13,13 @@ from pathlib import Path
 import pytest
 from conftest import ROOT
 
+from skillroll import __version__
+
 ADOPTION_OPT_IN = "SKILLROLL_ADOPTION_E2E"
 ADOPTION_KEY = "SKILLROLL_ADOPTION_API_KEY"
 ADOPTION_BASE_URL = "SKILLROLL_ADOPTION_BASE_URL"
 ADOPTION_MODEL = "SKILLROLL_ADOPTION_MODEL"
+RELEASE_WHEEL = "SKILLROLL_RELEASE_WHEEL"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "openai/gpt-4.1-nano"
 MAX_CASES_PER_RUN = 1
@@ -178,7 +181,15 @@ def _create_git_repository(repository: Path) -> None:
     )
 
 
-def _build_environment(tmp_path: Path) -> Path:
+def _candidate_wheel(tmp_path: Path) -> Path:
+    supplied = os.environ.get(RELEASE_WHEEL)
+    if supplied is not None:
+        wheel = Path(supplied)
+        assert wheel.is_absolute(), "Release wheel path must be absolute."
+        assert not wheel.is_symlink(), "Release wheel must not be a symlink."
+        assert wheel.is_file(), "Release wheel must be an existing file."
+        assert wheel.suffix == ".whl", "Release artifact must be a wheel."
+        return wheel
     artifacts = tmp_path / "build artifacts"
     uv = shutil.which("uv") or str(Path(sys.base_prefix) / "bin" / "uv")
     build_environment = dict(os.environ)
@@ -191,9 +202,43 @@ def _build_environment(tmp_path: Path) -> Path:
         capture_output=True,
         text=True,
         check=True,
+        timeout=180,
     )
+    return next(artifacts.glob("*.whl"))
+
+
+def _verify_installed_candidate(environment: Path, directory: Path) -> None:
+    completed = subprocess.run(
+        [
+            str(_python(environment)),
+            "-c",
+            "import json, skillroll; "
+            "print(json.dumps({'path': skillroll.__file__, "
+            "'version': skillroll.__version__}))",
+        ],
+        cwd=directory,
+        env=_subprocess_environment(environment),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=90,
+    )
+    installed = json.loads(completed.stdout)
+    assert Path(installed["path"]).resolve().is_relative_to(environment.resolve()), (
+        "Adoption check must import SkillRoll from the clean installed environment."
+    )
+    assert installed["version"] == __version__, (
+        "Installed wheel version must match the candidate source version."
+    )
+
+
+def _build_environment(tmp_path: Path) -> Path:
+    wheel = _candidate_wheel(tmp_path)
     environment = tmp_path / "clean installed environment"
     venv.EnvBuilder(with_pip=True).create(environment)
+    install_environment = dict(os.environ)
+    install_environment.pop("PYTHONPATH", None)
+    install_environment.pop(ADOPTION_KEY, None)
     subprocess.run(
         [
             str(_python(environment)),
@@ -201,12 +246,16 @@ def _build_environment(tmp_path: Path) -> Path:
             "pip",
             "install",
             "--no-deps",
-            str(next(artifacts.glob("*.whl"))),
+            str(wheel),
         ],
+        cwd=tmp_path,
+        env=install_environment,
         capture_output=True,
         text=True,
         check=True,
+        timeout=180,
     )
+    _verify_installed_candidate(environment, tmp_path)
     return environment
 
 

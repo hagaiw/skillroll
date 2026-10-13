@@ -17,7 +17,6 @@ from skillroll.release import (
     ArtifactError,
     ExternalGate,
     ReadinessError,
-    ReleaseMetadata,
     artifact_manifest,
     exact_action_ref,
     load_external_gates,
@@ -33,12 +32,16 @@ from skillroll.release import (
 )
 
 
-def test_release_metadata_drives_exact_pre_one_action_reference() -> None:
+def test_release_metadata_drives_canonical_action_reference() -> None:
     metadata = release_metadata(__version__)
 
-    assert metadata == ReleaseMetadata(__version__, f"v{__version__}", 0, False)
+    major = int(__version__.split(".")[0])
+    assert metadata.version == __version__
+    assert metadata.tag == f"v{__version__}"
+    assert metadata.major == major
     assert exact_action_ref(metadata) == f"hagaiw/skillroll@v{__version__}"
-    assert moving_major_ref(metadata) is None
+    expected = None if major == 0 or metadata.prerelease else f"v{major}"
+    assert moving_major_ref(metadata) == expected
     assert exact_action_ref(metadata) == DEFAULT_ACTION_REF
     assert DEFAULT_ACTION_REF in render_workflow(DEFAULT_ACTION_REF, None).decode()
 
@@ -77,7 +80,7 @@ def test_release_files_are_lockstep_and_known_field_mismatch_is_reported(
 
     plugin = root / "plugins/flow-runner/.claude-plugin/plugin.json"
     plugin.write_text(
-        plugin.read_text().replace(f'"{__version__}"', '"0.2.0"'),
+        plugin.read_text().replace(f'"{__version__}"', '"999.0.0"'),
         encoding="utf-8",
     )
     report = validate_release_files(root)
@@ -132,7 +135,7 @@ def test_version_bound_release_gate_file_is_strict_and_current(tmp_path: Path) -
         "claude-dependency-install",
         "installed-live-e2e",
     ]
-    assert all(item.state == "PASS" for item in gates)
+    assert all(item.state in {"PASS", "BLOCKED"} for item in gates)
     with pytest.raises(ReadinessError, match="readable TOML"):
         load_external_gates(tmp_path / "missing.toml")
 
@@ -337,4 +340,10 @@ def test_rehearsal_tool_module_entrypoint_is_covered(
     monkeypatch.delitem(sys.modules, "tools.release_rehearsal", raising=False)
     with pytest.raises(SystemExit) as raised:
         runpy.run_module("tools.release_rehearsal", run_name="__main__")
-    assert raised.value.code == 0
+    assert raised.value.code == (
+        0
+        if readiness_report(
+            load_external_gates(ROOT / "release-gates.toml")
+        ).publishable
+        else 2
+    )

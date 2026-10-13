@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 from conftest import ROOT
 
+from skillroll import __version__
+
 
 @pytest.mark.external
 def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> None:
@@ -27,6 +29,9 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
             "CLAUDE_CONFIG_DIR": str(tmp_path / "claude config"),
             "CLAUDE_CODE_PLUGIN_CACHE_DIR": str(tmp_path / "plugin cache"),
             "DISABLE_AUTOUPDATER": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "DISABLE_TELEMETRY": "1",
+            "DISABLE_ERROR_REPORTING": "1",
         }
     )
     git_commands = (
@@ -35,7 +40,7 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
         ("config", "user.email", "skillroll-test@invalid.example"),
         ("add", "."),
         ("commit", "-q", "-m", "candidate fixture"),
-        ("tag", "flow-runner--v0.1.2"),
+        ("tag", f"flow-runner--v{__version__}"),
     )
     for arguments in git_commands:
         subprocess.run(
@@ -43,6 +48,8 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
             check=True,
             capture_output=True,
             text=True,
+            cwd=repository,
+            timeout=90,
         )
 
     subprocess.run(
@@ -51,6 +58,8 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
         check=True,
         capture_output=True,
         text=True,
+        cwd=repository,
+        timeout=90,
     )
     installed = subprocess.run(
         (
@@ -65,6 +74,8 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
         check=True,
         capture_output=True,
         text=True,
+        cwd=repository,
+        timeout=90,
     )
     listed = subprocess.run(
         ("claude", "plugin", "list", "--json"),
@@ -72,13 +83,15 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
         check=True,
         capture_output=True,
         text=True,
+        cwd=repository,
+        timeout=90,
     )
 
     plugins = {item["id"]: item for item in json.loads(listed.stdout)}
     assert "+ 1 dependency: flow-runner" in installed.stdout
-    assert plugins["change-review-flow@skillroll"]["version"] == "0.1.2"
+    assert plugins["change-review-flow@skillroll"]["version"] == __version__
     assert plugins["change-review-flow@skillroll"]["enabled"] is True
-    assert plugins["flow-runner@skillroll"]["version"].startswith("0.1.2-")
+    assert plugins["flow-runner@skillroll"]["version"].startswith(f"{__version__}-")
     assert plugins["flow-runner@skillroll"]["enabled"] is True
     for item in plugins.values():
         assert str(tmp_path) in item["installPath"]

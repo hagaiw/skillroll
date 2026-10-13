@@ -1,10 +1,18 @@
 name: Release
+run-name: >-
+  ${{ inputs.candidate_run != '' &&
+      format('Publish {0} (prepare #{1})', inputs.version, inputs.candidate_run) ||
+      github.workflow }}
 
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
+      candidate_run:
+        description: Preparation run ID (set automatically by Release new version)
+        type: string
+        required: false
       publish:
         description: Publish the prepared version (otherwise rehearse only)
         type: boolean
@@ -13,20 +21,13 @@ on:
         description: Confirm the prepared version, without v (required to publish)
         type: string
         required: false
-  pull_request:
-    types: [closed]
-    branches: [main]
 
 # Serialize publication without cancelling a release already in progress.
 concurrency:
   group: >-
     skillroll-release-${{
       (github.event_name == 'release' ||
-       (github.event_name == 'workflow_dispatch' && inputs.publish) ||
-       (github.event_name == 'pull_request' &&
-        github.event.pull_request.merged == true &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        contains(github.event.pull_request.labels.*.name, 'release')))
+       (github.event_name == 'workflow_dispatch' && inputs.publish))
       && 'publish' || github.run_id }}
   cancel-in-progress: false
 
@@ -36,11 +37,9 @@ permissions:
 jobs:
   build:
     name: Build and rehearse
-    if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.pull_request.merged == true &&
-       github.event.pull_request.head.repo.full_name == github.repository &&
-       contains(github.event.pull_request.labels.*.name, 'release'))
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     outputs:
       publishable: ${{ steps.evidence.outputs.publishable }}
@@ -69,6 +68,7 @@ jobs:
           PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
           SELECTED_REF: ${{ github.ref }}
           REQUESTED_VERSION: ${{ inputs.version }}
+          CANDIDATE_RUN: ${{ inputs.candidate_run }}
         run: |
           uv run python - <<'PYTHON'
           import os
@@ -80,7 +80,10 @@ jobs:
           report = validate_release_files(Path('.'))
           assert report.is_valid, report.problems
           if os.environ['EVENT_NAME'] == 'workflow_dispatch' and os.environ['PUBLISH'] == 'true':
-              assert os.environ['SELECTED_REF'] == 'refs/heads/main', 'Publish from main only'
+              if os.environ.get('CANDIDATE_RUN'):
+                  assert os.environ['SELECTED_REF'] == f'refs/tags/{metadata.tag}', 'Prepared publication requires its exact tag'
+              else:
+                  assert os.environ['SELECTED_REF'] == 'refs/heads/main', 'Publish from main only'
               assert os.environ['REQUESTED_VERSION'] == metadata.version, 'Confirm the canonical version'
           commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tag = subprocess.run(['git', 'rev-parse', '--verify', f'refs/tags/{metadata.tag}^{{commit}}'], capture_output=True, text=True)
@@ -89,7 +92,8 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'tag={metadata.tag}\ncommit={commit}\nprerelease={str(metadata.prerelease).lower()}\n')
           PYTHON
-      - run: uv run pytest -q
+      - if: inputs.candidate_run == ''
+        run: uv run pytest -q
       # Token-created releases do not trigger other workflows: validate here too.
       - name: Validate eval structure without repository commands
         shell: bash
@@ -108,14 +112,55 @@ jobs:
           uv run python -c "import os; from skillroll.release import
           release_metadata; assert os.environ['RELEASE_TAG'] ==
           release_metadata().tag"
-      - run: uv build --out-dir dist
+      - if: inputs.candidate_run == ''
+        run: uv build --out-dir dist
+      - name: Verify preparation run origin
+        if: inputs.candidate_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANDIDATE_RUN: ${{ inputs.candidate_run }}
+        shell: bash
+        run: |
+          [[ "$CANDIDATE_RUN" =~ ^[0-9]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$CANDIDATE_RUN" > preparation-run.json
+          python - <<'PY'
+          import json, os
+          value = json.load(open('preparation-run.json'))
+          assert value['path'] == '.github/workflows/new-release.yml'
+          assert value['head_repository']['full_name'] == os.environ['GH_REPO']
+          assert value['event'] in {'workflow_dispatch', 'pull_request'}
+          PY
+          gh api "repos/$GH_REPO/actions/runs/$CANDIDATE_RUN/jobs" > preparation-jobs.json
+          python - <<'PY'
+          import json
+          jobs = json.load(open('preparation-jobs.json'))['jobs']
+          assert all(any(job['name'] == name and job['conclusion'] == 'success' for job in jobs)
+              for name in ['prepare', 'gates'])
+          PY
+      # actions/download-artifact v8.0.1
+      - if: inputs.candidate_run != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: verified-release
+          run-id: ${{ inputs.candidate_run }}
+          github-token: ${{ github.token }}
+      - name: Bind prepared artifacts to this tagged revision
+        if: inputs.candidate_run != ''
+        env:
+          CANDIDATE_RUN: ${{ inputs.candidate_run }}
+        run: >-
+          uv run python tools/verify_prepared_release.py --root .
+          --artifacts dist --evidence release-evidence
+          --commit "$GITHUB_SHA" --run-id "$CANDIDATE_RUN"
       - name: Verify wheel metadata before privileged handoff
         run: >-
           uv run python -c "from pathlib import Path; import zipfile;
           from skillroll import __version__; wheel = next(Path('dist').glob('*.whl'));
           archive = zipfile.ZipFile(wheel); metadata = next(name for name in
           archive.namelist() if name.endswith('.dist-info/METADATA'));
-          assert f'Version: {__version__}' in archive.read(metadata).decode()"
+          from email.parser import Parser;
+          assert Parser().parsestr(archive.read(metadata).decode())['Version'] == __version__"
       - id: evidence
         name: Create local evidence and check release gates
         shell: bash
@@ -159,6 +204,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       id-token: write
       attestations: write
     steps:
@@ -207,9 +253,13 @@ jobs:
           RELEASE_TAG: ${{ needs.build.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.build.outputs.commit }}
           PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          CANDIDATE_RUN: ${{ inputs.candidate_run }}
         shell: bash
         run: |
-          args=(--target "$RELEASE_COMMIT" --generate-notes)
+          args=(--verify-tag --target "$RELEASE_COMMIT" --generate-notes)
+          if [ -z "${CANDIDATE_RUN:-}" ]; then
+            args=(--target "$RELEASE_COMMIT" --generate-notes)
+          fi
           if [ "$PRERELEASE" = true ]; then
             args+=(--prerelease)
           fi
