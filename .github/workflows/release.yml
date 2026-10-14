@@ -113,7 +113,7 @@ jobs:
           release_metadata; assert os.environ['RELEASE_TAG'] ==
           release_metadata().tag"
       - if: inputs.candidate_run == ''
-        run: uv build --out-dir dist
+        run: uv build --out-dir dist --clear --no-create-gitignore
       - name: Verify preparation run origin
         if: inputs.candidate_run != ''
         env:

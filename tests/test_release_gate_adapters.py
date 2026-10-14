@@ -135,11 +135,20 @@ def test_clean_environment_installs_exact_supplied_wheel_and_verifies(
     assert verified == [(environment, tmp_path)]
 
 
+@pytest.mark.parametrize("problem", [None, "wrong_commit", "wrong_version", "untagged"])
 def test_claude_gate_uses_candidate_version_and_disposable_directories(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, problem: str | None
 ) -> None:
     monkeypatch.setattr(claude.shutil, "which", lambda command: "/fake/claude")
     calls: list[tuple[str, ...]] = []
+    candidate_commit = "a" * 40
+    dependency_version = f"{__version__}-{candidate_commit[:12]}"
+    if problem == "wrong_commit":
+        dependency_version = f"{__version__}-bbbbbbbbbbbb"
+    elif problem == "wrong_version":
+        dependency_version = f"{__version__}.post1-{candidate_commit[:12]}"
+    elif problem == "untagged":
+        dependency_version = __version__
 
     def run(
         arguments: tuple[str, ...], **kwargs: object
@@ -148,12 +157,14 @@ def test_claude_gate_uses_candidate_version_and_disposable_directories(
         assert kwargs["cwd"] == tmp_path / "candidate repository"
         assert kwargs["timeout"] == 90
         output = ""
+        if arguments[-2:] == ("rev-parse", "HEAD"):
+            output = candidate_commit + "\n"
         if arguments[0] == "claude":
             env = kwargs["env"]
             assert env["CLAUDE_CONFIG_DIR"] == str(tmp_path / "claude config")
             assert env["CLAUDE_CODE_PLUGIN_CACHE_DIR"] == str(tmp_path / "plugin cache")
             if arguments[2] == "install":
-                output = "+ 1 dependency: flow-runner"
+                output = "Installation completed with changed CLI wording."
             elif arguments[2] == "list":
                 output = json.dumps(
                     [
@@ -165,13 +176,17 @@ def test_claude_gate_uses_candidate_version_and_disposable_directories(
                         }
                         for name, version in [
                             ("change-review-flow", __version__),
-                            ("flow-runner", __version__ + "-local"),
+                            ("flow-runner", dependency_version),
                         ]
                     ]
                 )
         return subprocess.CompletedProcess(arguments, 0, output)
 
     monkeypatch.setattr(claude.subprocess, "run", run)
-    claude.test_official_cli_installs_the_exact_tagged_dependency(tmp_path)
+    if problem:
+        with pytest.raises(AssertionError):
+            claude.test_official_cli_installs_the_exact_tagged_dependency(tmp_path)
+    else:
+        claude.test_official_cli_installs_the_exact_tagged_dependency(tmp_path)
     assert any(args[-2:] == ("tag", f"flow-runner--v{__version__}") for args in calls)
     assert len([args for args in calls if args[0] == "claude"]) == 3

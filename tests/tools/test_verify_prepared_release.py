@@ -117,7 +117,12 @@ def test_artifact_corruption_blocks_publication(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("key", "value"),
-    [("commit", "b" * 40), ("version", "9.9.9"), ("artifacts", {}), ("signed", True)],
+    [
+        ("commit", "b" * 40),
+        ("version", f"{__version__}.post1"),
+        ("artifacts", {}),
+        ("signed", True),
+    ],
 )
 def test_provenance_cannot_change(tmp_path: Path, key: str, value: object) -> None:
     artifacts, evidence = fixture(tmp_path)
@@ -129,7 +134,7 @@ def test_provenance_cannot_change(tmp_path: Path, key: str, value: object) -> No
         verify(tmp_path, artifacts, evidence, "a" * 40, "123")
 
 
-@pytest.mark.parametrize("version", [__version__ + "0", "9.9.9"])
+@pytest.mark.parametrize("version", [__version__ + "0", f"{__version__}.post1"])
 def test_wheel_version_uses_exact_equality(tmp_path: Path, version: str) -> None:
     artifacts, evidence = fixture(tmp_path, version)
     with pytest.raises(ValueError, match="Wheel metadata"):

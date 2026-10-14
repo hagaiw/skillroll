@@ -13,6 +13,7 @@ import yaml
 from conftest import ROOT
 
 from skillroll import __version__
+from skillroll.release import release_metadata
 
 
 def workflow() -> dict:
@@ -43,13 +44,13 @@ def workflow() -> dict:
             "workflow_dispatch",
             "true",
             "refs/heads/main",
-            "9.9.9",
+            f"{__version__}.post1",
             None,
             "Confirm the canonical version",
         ),
         ("workflow_dispatch", "false", "refs/heads/other", "", None, None),
         ("pull_request", "true", "refs/heads/main", "", None, None),
-        ("release", "true", "refs/tags/v0.1.2", "", "candidate", None),
+        ("release", "true", f"refs/tags/v{__version__}", "", "candidate", None),
         (
             "workflow_dispatch",
             "true",
@@ -98,7 +99,8 @@ def test_candidate_guards(
         else:
             exec(source, {})
             assert output.read_text() == (
-                f"tag=v{__version__}\ncommit=candidate\nprerelease=false\n"
+                f"tag=v{__version__}\ncommit=candidate\n"
+                f"prerelease={str(release_metadata().prerelease).lower()}\n"
             )
 
 

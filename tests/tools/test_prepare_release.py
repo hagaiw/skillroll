@@ -63,7 +63,7 @@ def snapshot(root: Path) -> dict[str, bytes]:
         ("patch", None, "0.1.3"),
         ("minor", None, "0.2.0"),
         ("major", None, "1.0.0"),
-        ("patch", "0.2.0rc1", "0.2.0rc1"),
+        ("patch", "2.3.4", "2.3.4"),
     ],
 )
 def test_prepares_lockstep_metadata_and_clears_evidence(
@@ -73,7 +73,7 @@ def test_prepares_lockstep_metadata_and_clears_evidence(
     result = prepare(checkout, bump, version)
     assert result["version"] == expected
     assert result["tag"] == f"v{expected}"
-    assert result["prerelease"] == (version is not None)
+    assert result["prerelease"] is False
     assert result["plugin_tags"] == [f"demo--v{expected}", f"flow-runner--v{expected}"]
     assert (
         checkout / "src/skillroll/_version.py"
@@ -126,6 +126,7 @@ def test_dynamic_lock_entry_stays_dynamic(checkout: Path) -> None:
         "0.2",
         "00.2.0",
         "0.2.0-dev",
+        "0.2.0rc1",
         "0.2.0rc01",
         "0.2.0rc0",
         "0.2.0a1",

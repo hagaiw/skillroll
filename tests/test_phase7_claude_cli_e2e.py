@@ -52,6 +52,15 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
             timeout=90,
         )
 
+    candidate_commit = subprocess.run(
+        ("git", "-C", str(repository), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=repository,
+        timeout=90,
+    ).stdout.strip()
+
     subprocess.run(
         ("claude", "plugin", "marketplace", "add", str(repository)),
         env=environment,
@@ -61,7 +70,7 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
         cwd=repository,
         timeout=90,
     )
-    installed = subprocess.run(
+    subprocess.run(
         (
             "claude",
             "plugin",
@@ -88,10 +97,11 @@ def test_official_cli_installs_the_exact_tagged_dependency(tmp_path: Path) -> No
     )
 
     plugins = {item["id"]: item for item in json.loads(listed.stdout)}
-    assert "+ 1 dependency: flow-runner" in installed.stdout
     assert plugins["change-review-flow@skillroll"]["version"] == __version__
     assert plugins["change-review-flow@skillroll"]["enabled"] is True
-    assert plugins["flow-runner@skillroll"]["version"].startswith(f"{__version__}-")
+    assert plugins["flow-runner@skillroll"]["version"] == (
+        f"{__version__}-{candidate_commit[:12]}"
+    )
     assert plugins["flow-runner@skillroll"]["enabled"] is True
     for item in plugins.values():
         assert str(tmp_path) in item["installPath"]

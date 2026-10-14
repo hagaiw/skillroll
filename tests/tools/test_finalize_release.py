@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from skillroll.release import artifact_manifest
 from tools.finalize_release import finalize, main
 
 SHA = "a" * 40
@@ -27,6 +28,9 @@ def candidate(tmp_path: Path) -> Path:
     (tmp_path / "dist").mkdir()
     (tmp_path / "dist/skillroll-0.2.0rc1-py3-none-any.whl").write_bytes(b"wheel")
     (tmp_path / "dist/skillroll-0.2.0rc1.tar.gz").write_bytes(b"sdist")
+    (tmp_path / "prepared-SHA256SUMS.json").write_bytes(
+        artifact_manifest((tmp_path / "dist").iterdir())
+    )
     for name, case in (("live.xml", LIVE), ("claude.xml", CLAUDE)):
         (tmp_path / name).write_text(
             '<testsuites><testsuite tests="1" errors="0" failures="0" skipped="0">'
@@ -43,6 +47,7 @@ def run(checkout: Path, **changes: object) -> dict[str, str]:
         "candidate_commit": SHA,
         "run_url": URL,
         "artifacts": checkout / "dist",
+        "expected_manifest": checkout / "prepared-SHA256SUMS.json",
     }
     arguments.update(changes)
     return finalize(**arguments)  # type: ignore[arg-type]
@@ -129,6 +134,7 @@ def test_full_sha256_commit_is_supported(candidate: Path) -> None:
         "live.xml",
         "claude.xml",
         "src/skillroll/_version.py",
+        "prepared-SHA256SUMS.json",
         "dist/skillroll-0.2.0rc1-py3-none-any.whl",
         "dist/skillroll-0.2.0rc1.tar.gz",
     ],
@@ -201,6 +207,7 @@ def test_missing_root_gates_and_artifact_directory(candidate: Path) -> None:
         "src/skillroll/_version.py",
         "release-gates.toml",
         "live.xml",
+        "prepared-SHA256SUMS.json",
         "dist",
         "dist/skillroll-0.2.0rc1-py3-none-any.whl",
         "dist/skillroll-0.2.0rc1.tar.gz",
@@ -239,6 +246,8 @@ def cli(root: Path) -> list[str]:
         URL,
         "--artifacts",
         str(root / "dist"),
+        "--expected-manifest",
+        str(root / "prepared-SHA256SUMS.json"),
     ]
 
 
@@ -259,3 +268,38 @@ def test_cli_failure_exits_two(candidate: Path) -> None:
     with pytest.raises(SystemExit) as raised:
         main(cli(candidate))
     assert raised.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "skillroll-0.2.0rc1-py3-none-any.whl",
+        "skillroll-0.2.0rc1.tar.gz",
+        "unexpected.txt",
+    ],
+)
+def test_artifact_changes_after_checks_never_promote_gates(
+    candidate: Path, name: str
+) -> None:
+    (candidate / "dist" / name).write_bytes(b"mutated after checks")
+    with pytest.raises(ValueError, match="changed since"):
+        run(candidate)
+    assert (candidate / "release-gates.toml").read_text() == 'state = "BLOCKED"\n'
+
+
+@pytest.mark.parametrize("contents", [b"not JSON", b"{}", b"[]"])
+def test_bad_preparation_manifest_is_blocking(candidate: Path, contents: bytes) -> None:
+    (candidate / "prepared-SHA256SUMS.json").write_bytes(contents)
+    with pytest.raises(ValueError, match="changed since"):
+        run(candidate)
+    assert (candidate / "release-gates.toml").read_text() == 'state = "BLOCKED"\n'
+
+
+def test_preparation_manifest_cannot_authorize_extra_artifact(candidate: Path) -> None:
+    (candidate / "dist/extra.txt").write_bytes(b"prepared extra")
+    (candidate / "prepared-SHA256SUMS.json").write_bytes(
+        artifact_manifest((candidate / "dist").iterdir())
+    )
+    with pytest.raises(ValueError, match="changed since"):
+        run(candidate)
+    assert (candidate / "release-gates.toml").read_text() == 'state = "BLOCKED"\n'
