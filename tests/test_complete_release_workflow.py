@@ -108,9 +108,9 @@ def test_publisher_checks_preparation_origin_before_artifact_handoff() -> None:
 
 
 @pytest.mark.parametrize("conflict", ["", "main", "tag"])
-@pytest.mark.parametrize("tag_newlines", ["native", "crlf"])
+@pytest.mark.parametrize("stdout_newlines", ["native", "crlf"])
 def test_atomic_persistence_never_partially_pushes_or_dispatches(
-    tmp_path: Path, conflict: str, tag_newlines: str
+    tmp_path: Path, conflict: str, stdout_newlines: str
 ) -> None:
     """Run the real handoff script against a disposable local bare repository."""
     import json
@@ -177,11 +177,10 @@ def test_atomic_persistence_never_partially_pushes_or_dispatches(
     source = step["run"].replace(
         "python - <<'PYTHON'", f"\"{sys.executable}\" - <<'PYTHON'"
     )
-    if tag_newlines == "crlf":
+    if stdout_newlines == "crlf":
         source = source.replace(
-            "print('\\n'.join(tags))",
-            "import sys; sys.stdout.buffer.write("
-            "('\\r\\n'.join(tags) + '\\r\\n').encode())",
+            "sys.stdout.buffer.write(",
+            "sys.stdout.reconfigure(newline='\\r\\n'); sys.stdout.buffer.write(",
         )
     bash = "bash"
     if os.name == "nt":

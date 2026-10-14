@@ -87,11 +87,12 @@ def prepare(
     root: Path, bump: str = "patch", version: str | None = None
 ) -> dict[str, object]:
     """Validate every input before writing candidate metadata and clearing evidence."""
-    if root.is_symlink() or not root.is_dir() or root.resolve() == Path(root.anchor):
+    resolved = root.resolve()
+    if root.is_symlink() or not root.is_dir() or resolved == Path(resolved.anchor):
         raise ValueError("release root must be a regular checkout directory")
     # Resolve outer directory aliases (such as macOS /var) once. All candidate
     # inputs must then stay within this root, without symlinks inside the checkout.
-    root = root.resolve()
+    root = resolved
     canonical = root / "src/skillroll/_version.py"
     original = _read(root, canonical)
     matches = _CANONICAL.findall(original)
@@ -166,7 +167,7 @@ def prepare(
         "tag": f"v{target}",
         "prerelease": _version(target).is_prerelease,
         "plugin_tags": plugin_tags,
-        "changed_paths": [str(path.relative_to(root)) for path in updates],
+        "changed_paths": [path.relative_to(root).as_posix() for path in updates],
     }
 
 

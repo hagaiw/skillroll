@@ -51,7 +51,7 @@ def checkout(tmp_path: Path) -> Path:
 
 def snapshot(root: Path) -> dict[str, bytes]:
     return {
-        str(path.relative_to(root)): path.read_bytes()
+        path.relative_to(root).as_posix(): path.read_bytes()
         for path in root.rglob("*")
         if path.is_file()
     }
@@ -212,6 +212,9 @@ def test_no_plugins_and_invalid_root(checkout: Path, tmp_path: Path) -> None:
         prepare(checkout)
     with pytest.raises(ValueError, match="root"):
         prepare(tmp_path / "missing")
+    with pytest.raises(ValueError, match="root"):
+        prepare(Path(tmp_path.resolve().anchor))
+    # A slash-only Windows root is drive-relative until resolved.
     with pytest.raises(ValueError, match="root"):
         prepare(Path("/"))
 

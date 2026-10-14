@@ -248,8 +248,8 @@ jobs:
           echo "::add-mask::$auth"
           export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
           refs=("$COMMIT:refs/heads/main" "$COMMIT:refs/tags/$TAG")
-          python - <<'PYTHON' > plugin-tags.txt
-          import json, os, re
+          python - <<'PYTHON' > plugin-tags.bin
+          import json, os, re, sys
           metadata = json.load(open('release-metadata.json'))
           assert metadata['version'] == os.environ['VERSION']
           assert metadata['tag'] == os.environ['TAG']
@@ -257,12 +257,12 @@ jobs:
           assert isinstance(tags, list) and tags and len(tags) == len(set(tags))
           assert all(re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*--v' + re.escape(os.environ['VERSION']), tag) for tag in tags)
           assert 'flow-runner--v' + os.environ['VERSION'] in tags
-          print('\n'.join(tags))
+          sys.stdout.buffer.write(b'\0'.join(tag.encode() for tag in tags) + b'\0')
           PYTHON
           plugin_tags=()
-          while IFS= read -r tag; do
-            plugin_tags+=("${tag%$'\r'}")
-          done < plugin-tags.txt
+          while IFS= read -r -d '' tag; do
+            plugin_tags+=("$tag")
+          done < plugin-tags.bin
           for tag in "${plugin_tags[@]}"; do refs+=("$COMMIT:refs/tags/$tag"); done
           remote="$(git -C handoff ls-remote origin refs/heads/main | cut -f1)"
           if [ "$remote" != "$COMMIT" ]; then
