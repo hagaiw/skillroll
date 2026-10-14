@@ -155,8 +155,8 @@ def test_parse_git_name_status_rejects_incomplete_or_unsafe_records(
         ),
         (
             ChangedPath("deleted", PurePosixPath("skills/review/evals/edge.eval.md")),
-            "all",
-            4,
+            "cases",
+            2,
         ),
         (ChangedPath("unknown"), "all", 4),
         (ChangedPath("modified", None, PurePosixPath("pyproject.toml")), "all", 4),

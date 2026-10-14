@@ -1,4 +1,4 @@
-"""Sequential composition of validation, execution, judging, checks, and evidence."""
+"""Composition of validation, execution, judging, checks, and evidence."""
 
 from __future__ import annotations
 
@@ -345,6 +345,7 @@ def _result_summary(
     profile_name: str | None = None,
     profile_purpose: str | None = None,
     skill_available: bool = True,
+    redactor: SecretRedactor | None = None,
 ) -> dict[str, object]:
     overall_explanation, next_action = _overall_text(
         outcome, judged, assertions, checks, failure
@@ -370,7 +371,7 @@ def _result_summary(
         else check_failure.detail or "A repository check could not finish."
     )
     technical_details = (
-        failure.details
+        bounded_failure_details(failure, redactor or SecretRedactor(SecretValue("")))
         if failure is not None
         else ()
         if check_failure is None
@@ -566,12 +567,30 @@ async def _resolve_profile(
     return profile, transport
 
 
+def _concurrency_failure(
+    concurrency: int, run_commands: bool
+) -> InferenceFailure | None:
+    if concurrency < 1 or concurrency > 16:
+        return InferenceFailure(
+            InferenceFailureKind.INVALID_CONFIGURATION,
+            "--concurrency must be an integer from 1 to 16.",
+        )
+    if concurrency > 1 and run_commands:
+        return InferenceFailure(
+            InferenceFailureKind.INVALID_CONFIGURATION,
+            "--run-commands requires --concurrency 1 to prevent "
+            "repository command overlap.",
+        )
+    return None
+
+
 async def evaluate_repository(
     config: SkillRollConfig,
     cases: tuple[EvalCase, ...],
     *,
     environment: Mapping[str, str],
     run_commands: bool,
+    concurrency: int = 1,
     transport_factory: TransportFactory = _transport,
     executor_factory: ExecutorFactory = _executor,
     check_runner: CheckRunner | None = None,
@@ -582,6 +601,9 @@ async def evaluate_repository(
     _close_transport: bool = True,
 ) -> tuple[CaseResult, ...] | InferenceFailure:
     """Evaluate every selected case once, in stable order, after one preflight."""
+    failure = _concurrency_failure(concurrency, run_commands)
+    if failure is not None:
+        return failure
     resolved = _resolved or await _resolve_profile(
         config, environment, transport_factory, model_profile
     )
@@ -591,10 +613,10 @@ async def evaluate_repository(
     try:
         redactor = SecretRedactor(profile.api_key)
         store = store_factory(config.repository_root, redactor)
-        executor = executor_factory(profile)
         runner = HostCheckRunner() if check_runner is None else check_runner
-        results: list[CaseResult] = []
-        for case in sorted(cases, key=lambda item: item.identity.as_posix()):
+
+        async def evaluate_case(case: EvalCase) -> CaseResult:
+            executor = executor_factory(profile)
             preliminary = await execute_preliminary(
                 config,
                 case,
@@ -745,6 +767,7 @@ async def evaluate_repository(
                         profile_name=profile.profile_name,
                         profile_purpose=profile.profile_purpose,
                         skill_available=skill_available,
+                        redactor=redactor,
                     )
                     store.append(
                         directory,
@@ -812,8 +835,27 @@ async def evaluate_repository(
                         events,
                         skill_available,
                     )
-            results.append(result)
-        return tuple(results)
+            return result
+
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def bounded_case(case: EvalCase) -> CaseResult:
+            async with semaphore:
+                return await evaluate_case(case)
+
+        tasks = [
+            asyncio.create_task(bounded_case(case))
+            for case in sorted(cases, key=lambda item: item.identity.as_posix())
+        ]
+        try:
+            return tuple(await asyncio.gather(*tasks))
+        finally:
+            # gather does not stop siblings when a worker raises. Drain all workers
+            # before closing their shared transport, including on cancellation.
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
     finally:
         if _close_transport:
             await transport.close()
@@ -984,6 +1026,7 @@ async def evaluate_experiment(
     run_commands: bool,
     samples: int,
     with_skill_control: bool,
+    concurrency: int = 1,
     transport_factory: TransportFactory = _transport,
     executor_factory: ExecutorFactory = _executor,
     check_runner: CheckRunner | None = None,
@@ -991,6 +1034,9 @@ async def evaluate_experiment(
     model_profile: str | None = None,
 ) -> ExperimentResult | InferenceFailure:
     """Collect independent samples and optional paired skill-omission controls."""
+    failure = _concurrency_failure(concurrency, run_commands)
+    if failure is not None:
+        return failure
     resolved = await _resolve_profile(
         config, environment, transport_factory, model_profile
     )
@@ -1007,6 +1053,7 @@ async def evaluate_experiment(
                 cases,
                 environment=environment,
                 run_commands=run_commands,
+                concurrency=concurrency,
                 transport_factory=transport_factory,
                 executor_factory=executor_factory,
                 check_runner=check_runner,
@@ -1025,6 +1072,7 @@ async def evaluate_experiment(
                     cases,
                     environment=environment,
                     run_commands=False,
+                    concurrency=concurrency,
                     transport_factory=transport_factory,
                     executor_factory=executor_factory,
                     check_runner=check_runner,
@@ -1147,6 +1195,7 @@ def run(
     case: str | None = None,
     all_cases: bool = False,
     run_commands: bool = False,
+    concurrency: int = 1,
     environment: Mapping[str, str] | None = None,
     transport_factory: TransportFactory = _transport,
     executor_factory: ExecutorFactory = _executor,
@@ -1158,6 +1207,9 @@ def run(
     with_skill_control: bool = False,
 ) -> CommandResult:
     """Resolve the local scope, validate, then run the complete pipeline."""
+    failure = _concurrency_failure(concurrency, run_commands)
+    if failure is not None:
+        return _failure_result(failure)
     if samples < 1 or samples > 10:
         return CommandResult(
             Outcome.ERROR,
@@ -1202,6 +1254,7 @@ def run(
                 report.cases if selected_cases is None else selected_cases,
                 environment=values,
                 run_commands=run_commands,
+                concurrency=concurrency,
                 samples=samples,
                 with_skill_control=with_skill_control,
                 transport_factory=transport_factory,
@@ -1216,6 +1269,7 @@ def run(
                 report.cases if selected_cases is None else selected_cases,
                 environment=values,
                 run_commands=run_commands,
+                concurrency=concurrency,
                 transport_factory=transport_factory,
                 executor_factory=executor_factory,
                 check_runner=check_runner,

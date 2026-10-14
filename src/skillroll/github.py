@@ -8,14 +8,19 @@ files GitHub Actions expects (step summary and action outputs).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from skillroll.diagnostics import CommandResult
+from skillroll.impact import ImpactPolicy
 from skillroll.models import EvalCase, ValidationReport
+
+_DEFAULT_IMPACT_POLICY = ImpactPolicy()
 
 type ChangeKind = Literal["added", "modified", "deleted", "renamed", "unknown"]
 type ChangedScope = Literal["none", "cases", "all"]
@@ -190,9 +195,11 @@ def _is_docs_only(path: PurePosixPath, skills_root: PurePosixPath) -> bool:
 
 
 def select_changed(
-    report: ValidationReport, changes: Sequence[ChangedPath]
+    report: ValidationReport,
+    changes: Sequence[ChangedPath],
+    policy: ImpactPolicy = _DEFAULT_IMPACT_POLICY,
 ) -> ChangedSelection:
-    """Select cases conservatively; every uncertain path intentionally widens."""
+    """Union known impacts; uncertain paths widen, never unrelated exemptions."""
     if not changes:
         return ChangedSelection("none", (), "No skill or eval files changed.")
     if report.config is None:
@@ -201,62 +208,109 @@ def select_changed(
         )
     root = report.repository_root
     config_path = _relative(root, report.config.config_path)
-    selected: list[EvalCase] = []
-    docs = 0
+    selected: dict[PurePosixPath, EvalCase] = {}
+    reasons: list[str] = []
+    paths: list[PurePosixPath] = []
     for change in changes:
-        if change.kind in {"deleted", "renamed", "unknown"}:
+        if change.kind == "unknown":
             return ChangedSelection(
-                "all",
-                report.cases,
-                "A renamed, deleted, or uncertain file change requires a "
-                "complete evaluation.",
+                "all", report.cases, "An uncertain change requires every case."
             )
-        path = change.new_path
-        if path is None:
+        endpoints = tuple(
+            path for path in (change.old_path, change.new_path) if path is not None
+        )
+        if not endpoints:
             return ChangedSelection(
                 "all", report.cases, "A changed file could not be mapped safely."
             )
-        if (
-            path == config_path
-            or path.parts[:2] == (".github", "workflows")
-            or path.name == "action.yml"
-        ):
-            return ChangedSelection(
-                "all",
-                report.cases,
-                "SkillRoll configuration or automation changed, so every skill "
-                "is evaluated.",
+        paths.extend(endpoints)
+        for path in endpoints:
+            if (
+                path == config_path
+                or path.name == "action.yml"
+                or any(fnmatchcase(path.as_posix(), pattern) for pattern in policy.full)
+            ):
+                return ChangedSelection(
+                    "all", report.cases, f"Shared evaluation input changed: {path}."
+                )
+            exact = tuple(
+                case for case in report.cases if _relative(root, case.path) == path
             )
-        exact_cases = tuple(
-            case for case in report.cases if _relative(root, case.path) == path
+            skill_cases = _skill_for_path(report, path)
+            if exact and change.kind not in {"deleted", "renamed"}:
+                affected = exact
+            elif skill_cases is not None:
+                affected = skill_cases
+            elif any(
+                fnmatchcase(path.as_posix(), pattern) for pattern in policy.offline
+            ):
+                reasons.append(f"Offline-only: {path}")
+                continue
+            elif _is_docs_only(path, report.config.skills_path):
+                reasons.append(f"Documentation-only: {path}")
+                continue
+            elif any(
+                fnmatchcase(path.as_posix(), source)
+                for source, _ in policy.dependencies
+            ):
+                affected = tuple(
+                    case
+                    for case in report.cases
+                    if any(
+                        fnmatchcase(case.path.relative_to(root).as_posix(), source)
+                        for source, _ in policy.dependencies
+                        if fnmatchcase(path.as_posix(), source)
+                    )
+                )
+            else:
+                return ChangedSelection(
+                    "all", report.cases, f"Unmapped impact requires every case: {path}."
+                )
+            selected.update((case.identity, case) for case in affected)
+            reasons.append(f"Affected cases: {path}")
+    # Expand declared reverse dependencies to a fixed point, including cycles.
+    # A target is an affected path surface, not just its eval filenames. Use a
+    # conservative fixed-prefix overlap so SKILL.md/script-specific downstream
+    # sources are not missed when the target is a whole skill directory.
+    dependencies = dict(policy.dependencies)
+    pending_sources = [
+        source
+        for source in dependencies
+        if any(
+            fnmatchcase(path.as_posix(), source)
+            and (not path.name.endswith(".eval.md") or source.endswith(".eval.md"))
+            for path in paths
         )
-        if exact_cases:
-            selected.extend(exact_cases)
+    ]
+    expanded: set[str] = set()
+    while pending_sources:
+        source = pending_sources.pop()
+        if source in expanded:
             continue
-        skill_cases = _skill_for_path(report, path)
-        if skill_cases is not None:
-            selected.extend(skill_cases)
-            continue
-        if _is_docs_only(path, report.config.skills_path):
-            docs += 1
-            continue
-        return ChangedSelection(
-            "all",
-            report.cases,
-            "A changed file is outside a known skill, so SkillRoll cannot "
-            "safely narrow the evaluation.",
-        )
-    unique = tuple({case.identity: case for case in selected}.values())
-    ordered = tuple(sorted(unique, key=lambda case: case.identity.as_posix()))
-    if ordered:
-        return ChangedSelection(
-            "cases", ordered, "Only the changed skills or eval cases are evaluated."
-        )
-    return ChangedSelection(
-        "none",
-        (),
-        f"{docs} documentation-only file(s) did not change a skill or eval case.",
+        expanded.add(source)
+        for target in dependencies[source]:
+            dependents = tuple(
+                case
+                for case in report.cases
+                if fnmatchcase(case.path.relative_to(root).as_posix(), target)
+            )
+            if not dependents:
+                return ChangedSelection(
+                    "all",
+                    report.cases,
+                    f"Unmapped dependency requires every case: {target}.",
+                )
+            selected.update((case.identity, case) for case in dependents)
+            target_prefix = re.split(r"[?*\[]", target, maxsplit=1)[0]
+            for downstream in dependencies:
+                prefix = re.split(r"[?*\[]", downstream, maxsplit=1)[0]
+                if target_prefix.startswith(prefix) or prefix.startswith(target_prefix):
+                    pending_sources.append(downstream)
+            reasons.append(f"Dependency: {source} -> {target}")
+    ordered = tuple(
+        sorted(selected.values(), key=lambda case: case.identity.as_posix())
     )
+    return ChangedSelection("cases" if ordered else "none", ordered, "; ".join(reasons))
 
 
 def valid_reviewed_ref(value: str) -> bool:

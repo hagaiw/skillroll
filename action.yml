@@ -2,7 +2,7 @@ name: SkillRoll
 description: Run Markdown behavior evals for Agent Skills in CI.
 inputs:
   mode:
-    description: Check case files or run their evals
+    description: Plan affected cases, check case files, or run their evals
     required: true
   scope:
     description: changed, all, skill, or case
@@ -31,6 +31,13 @@ inputs:
     description: Also run samples without the selected skill for comparison
     required: false
     default: "false"
+  concurrency:
+    description: Maximum simultaneous independent cases (1-16); commands require 1
+    required: false
+    default: "1"
+  impact-policy:
+    description: Reviewed repository-relative TOML impact policy for changed scope
+    required: false
   command-notice:
     description: Explain when repository checks are intentionally not run
     required: false
@@ -77,6 +84,8 @@ runs:
         SKILLROLL_SELECTION_PATH: ${{ inputs.selection-path }}
         SKILLROLL_REVIEWED_REF: ${{ inputs.reviewed-ref }}
         SKILLROLL_RUN_COMMANDS: ${{ inputs.run-commands }}
+        SKILLROLL_CONCURRENCY: ${{ inputs.concurrency }}
+        SKILLROLL_IMPACT_POLICY: ${{ inputs.impact-policy }}
         SKILLROLL_SAMPLES: ${{ inputs.samples }}
         SKILLROLL_WITH_SKILL_CONTROL: ${{ inputs.with-skill-control }}
         SKILLROLL_COMMAND_NOTICE: ${{ inputs.command-notice }}
@@ -85,6 +94,10 @@ runs:
         SKILLROLL_FORK_NOTICE: ${{ inputs.fork-notice }}
       run: |
         set +e
+        policy_args=()
+        if [ -n "$SKILLROLL_IMPACT_POLICY" ]; then
+          policy_args=(--impact-policy "$SKILLROLL_IMPACT_POLICY")
+        fi
         uv run --project "$GITHUB_ACTION_PATH" --directory "$GITHUB_WORKSPACE" python -m skillroll.github_action \
           --mode "$SKILLROLL_MODE" \
           --scope "$SKILLROLL_SCOPE" \
@@ -94,6 +107,8 @@ runs:
           --reviewed-ref "$SKILLROLL_REVIEWED_REF" \
           --run-commands "$SKILLROLL_RUN_COMMANDS" \
           --samples "$SKILLROLL_SAMPLES" \
+          --concurrency "$SKILLROLL_CONCURRENCY" \
+          "${policy_args[@]}" \
           --with-skill-control "$SKILLROLL_WITH_SKILL_CONTROL" \
           --command-notice "$SKILLROLL_COMMAND_NOTICE" \
           --upload-artifact "$SKILLROLL_UPLOAD_ARTIFACT" \

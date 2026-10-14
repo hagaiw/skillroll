@@ -5,8 +5,9 @@
 `CI` runs offline tests on Linux, macOS, and Windows, checks 100% statement and
 branch coverage plus function coverage, Ruff, strict mypy, and Action syntax,
 and builds and tests the package. `SkillRoll` validates changed evals on PRs.
-Owner-authored, same-repository PRs also run live evals when
-`SKILLROLL_LIVE_EVAL=true`, using the `skillroll-eval` environment. Its manual
+Owner-authored, same-repository PRs run the affected live cases when the reviewed
+impact plan selects cases and `SKILLROLL_LIVE_EVAL=true`, using the
+`skillroll-eval` environment. Its manual
 workflow can evaluate a reviewed revision. These model-backed runs are separate
 from release automation and can spend inference budget.
 
