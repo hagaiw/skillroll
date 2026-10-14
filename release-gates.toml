@@ -1,12 +1,12 @@
 schema_version = 1
-version = "0.1.2"
+version = "0.2.0"
 
 [[gates]]
 name = "installed-live-e2e"
-state = "PASS"
-detail = "The built 0.1.2 wheel passed the one-case live adoption E2E, including local CLI and GitHub Action evaluation paths, on 2026-08-23."
+state = "BLOCKED"
+detail = "Candidate installed live E2E has not run."
 
 [[gates]]
 name = "claude-dependency-install"
-state = "PASS"
-detail = "Claude Code installed change-review-flow and its exact-tagged flow-runner dependency from the 0.1.2 candidate in an isolated repository and configuration directory on 2026-08-23."
+state = "BLOCKED"
+detail = "Candidate Claude dependency installation has not run."

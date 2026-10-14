@@ -139,7 +139,7 @@ jobs:
     environment: skillroll-eval
     steps:
       - name: Check the reviewed revision format
-        uses: hagaiw/skillroll@v0.1.2
+        uses: hagaiw/skillroll@v0.2.0
         with:
           mode: validate-ref
           scope: all
@@ -173,7 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check the reviewed revision format
-        uses: hagaiw/skillroll@v0.1.2
+        uses: hagaiw/skillroll@v0.2.0
         with:
           mode: validate-ref
           scope: all
