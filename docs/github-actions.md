@@ -64,18 +64,92 @@ repositories.
 
 See the [security model](security.md) and [results](results.md).
 
+## Changed-case selection
+
+The Action's `changed` scope computes one explainable plan. Adding or modifying
+one eval selects that case; changing a skill prompt, reference, or script selects
+that skill's cases. Renames consider both paths; deleted evals select the
+remaining cases for their skill. An unknown path, missing configuration, or
+unmappable removal selects the full suite. An unreadable diff also falls back to
+the full suite. Full offline structure validation still precedes inference.
+
+Repositories can explicitly pass the `impact-policy` Action input to a reviewed
+repository-relative TOML file:
+
+```toml
+schema_version = 1
+offline = ["tests/**", "docs/**", ".github/workflows/release.yml"]
+full = ["shared-prompts/**"]
+
+[[dependencies]]
+changed = "skills/shared-runner/**"
+affected = ["skills/release-flow/**"]
+```
+
+Globs match repository-relative paths. Skill/eval paths take precedence over
+offline exemptions. Configuration, Action metadata, policy edits, and declared
+full-suite paths always select the full suite. Eval-only changes do not expand
+broad skill dependencies; an explicit source ending in `.eval.md` can declare
+a dependency on an eval. Reverse dependencies expand transitively, including
+cycles. Combine all targets under a single `changed`
+source; a dependency target without discoverable cases widens to the full suite.
+Exemptions are reviewed declarations, not automatic source dependency analysis.
+Unknown paths remain conservative. Malformed policies fail instead of silently
+skipping evaluation.
+
+Use `mode: plan` with `scope: changed` and the same base/head SHAs and policy to
+inspect selected cases and reasons without using a model key. The plan is
+included in JSON output and GitHub summaries. Use `scope: all` without a policy
+to explicitly request the full suite.
+
+## Concurrent cases
+
+`skillroll eval --all --concurrency 4` evaluates up to four independent cases at
+a time. The CLI and Action default to one; the `concurrency` Action input accepts
+1-16. Generated automatic workflows default to four and allow a repository
+variable `SKILLROLL_EVAL_CONCURRENCY` to lower or raise the cap. Manual workflows
+expose a concurrency input. Use an Action revision containing these features;
+the published `v0.1.2` Action does not support them.
+
+Each case retains ordered world actions, separate executor/world state, and its
+own evidence directory. Reports stay in stable case order even when cases finish
+out of order. Preflight is shared once for the chosen profile. Samples and
+skill-omission controls remain sequential batches. Cancellation drains workers
+before closing shared transport resources.
+
+Repository commands require concurrency 1 because they can mutate shared files.
+Parallelism reduces elapsed time, not the number of evaluations or their intended
+inference budget. Start with a small cap and review duration, provider errors,
+and cost; reduce the cap if throttled. Technical failures and behavioral failures
+remain visible, and model requests are not silently retried.
+
 ## SkillRoll's own repository
 
-This repository keeps offline validation enabled for every PR, but skips automatic
-live evals when all changed paths are under `docs/` or `tests/`, or are the known
-release/CI workflows, the explicit version preparation/evidence helpers,
-and top-level documentation listed in the workflow's
-`live-scope` step. These exemptions are specific to this repository and are not
-added to workflows generated for other repositories.
+This repository uses `.github/skillroll-impact.toml` for both its secretless plan
+and its live run, replacing the separate workflow-only filter. Mixed PRs union
+the affected cases without letting unrelated tests, release automation, setup,
+or presentation helpers expand the plan. Shared harness prompt references select
+every case. The policy explicitly records the `flow-runner` reverse dependencies
+and tests them against plugin metadata so new dependent plugins cannot silently
+be omitted. Source files not explicitly exempted select every case; this includes
+runtime, judge, parser, inference, and world code.
 
-Changes to `.github/workflows/skillroll.yml`, `action.yml`, source code, model
-configuration, dependencies, shared prompts, skills, or unknown paths still allow
-live evals under the owner/environment policy. Mixed PRs remain eligible and use
-the Action's conservative changed-case selection. Renames check both old and new
-paths, so moving a skill into an exempt directory cannot hide its removal.
-Manual evaluations and release validation remain available regardless of paths.
+Offline jobs run candidate code with read-only permissions and no inference key.
+Automatic live runs use that same exact candidate's local Action only for
+owner-authored, same-repository PRs with `SKILLROLL_LIVE_EVAL=true`, inside the
+`skillroll-eval` environment. Candidate Python and Action code receive the eval
+key: configure environment reviewers and review that revision before approving.
+
+This repository defaults automatic and manual live runs to concurrency 1 because
+observed parallel requests exceeded the provider account's in-flight reservation
+budget. Set `SKILLROLL_EVAL_CONCURRENCY` or the manual concurrency input to raise
+the cap after checking the account's available budget; generated downstream
+workflows retain their default of four.
+
+Fork PRs never enter that credentialed path. This fixes the gap where changing
+harness source still executed the old published harness.
+
+Manual runs validate the entered revision format using the released Action,
+then evaluate the explicitly reviewed checkout's candidate code through the
+same environment. Downstream generated workflows continue to pin their chosen
+published Action; they do not execute their skills repository as harness code.
