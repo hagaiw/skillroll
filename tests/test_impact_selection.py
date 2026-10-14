@@ -270,7 +270,7 @@ def test_workflow_plans_and_runs_the_same_candidate_harness() -> None:
     assert plan["with"]["impact-policy"] == live["with"]["impact-policy"]
     assert plan["with"]["scope"] == live["with"]["scope"] == "changed"
     assert (
-        live["with"]["concurrency"] == "${{ vars.SKILLROLL_EVAL_CONCURRENCY || '4' }}"
+        live["with"]["concurrency"] == "${{ vars.SKILLROLL_EVAL_CONCURRENCY || '1' }}"
     )
     assert live["with"]["run-commands"] is False
     assert "selected-case-count != '0'" in jobs["live-eval"]["if"]
@@ -380,3 +380,37 @@ def test_single_eval_does_not_expand_broad_skill_dependencies(tmp_path: Path) ->
     assert len(select_changed(report, (change(path),), broad).cases) == 1
     explicit = ImpactPolicy(dependencies=((path, ("skills/overview/**",)),))
     assert len(select_changed(report, (change(path),), explicit).cases) == 3
+
+
+def test_repository_release_helpers_stay_offline_in_mixed_diffs() -> None:
+    policy = load_impact_policy(ROOT, ".github/skillroll-impact.toml")
+    report = validate_repository(ROOT)
+    paths = (
+        ".github/workflows/new-release.yml",
+        "tools/prepare_release.py",
+        "tools/finalize_release.py",
+        "tools/verify_prepared_release.py",
+        "tests/test_release.py",
+        "docs/releasing.md",
+    )
+    changes = tuple(change(path) for path in paths)
+    assert select_changed(report, changes, policy).scope == "none"
+    selected_case = report.cases[0]
+    case_path = selected_case.path.relative_to(ROOT).as_posix()
+    mixed = select_changed(report, (*changes, change(case_path)), policy)
+    assert mixed.scope == "cases" and mixed.cases == (selected_case,)
+    for unknown in ("tools/other_release.py", ".github/workflows/other-release.yml"):
+        assert (
+            select_changed(report, (*changes, change(unknown)), policy).scope == "all"
+        )
+
+
+def test_repository_concurrency_defaults_are_conservative() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/skillroll.yml").read_text())
+    dispatch = workflow[True]["workflow_dispatch"]["inputs"]
+    assert dispatch["concurrency"]["default"] == 1
+    steps = workflow["jobs"]["live-eval"]["steps"]
+    live = next(step for step in steps if step.get("id") == "live")
+    assert (
+        live["with"]["concurrency"] == "${{ vars.SKILLROLL_EVAL_CONCURRENCY || '1' }}"
+    )

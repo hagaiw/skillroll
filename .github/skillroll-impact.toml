@@ -10,6 +10,8 @@ offline = [
   "src/skillroll/initialization/**", "src/skillroll/commands/initialize.py",
   "src/skillroll/commands/create_case.py", "src/skillroll/_assets/**",
   "tools/check_function_coverage.py", "tools/release_rehearsal.py",
+  ".github/workflows/new-release.yml", "tools/prepare_release.py",
+  "tools/finalize_release.py", "tools/verify_prepared_release.py",
 ]
 full = [
   ".github/skillroll-impact.toml", ".github/workflows/skillroll.yml",

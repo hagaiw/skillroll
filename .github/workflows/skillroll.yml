@@ -32,7 +32,7 @@ on:
       concurrency:
         description: Maximum simultaneous independent cases (1-16)
         required: false
-        default: 4
+        default: 1
         type: string
       run_repository_checks:
         description: Run repository-declared commands in a separate secretless job
@@ -120,7 +120,7 @@ jobs:
           base-sha: ${{ github.event.pull_request.base.sha }}
           head-sha: ${{ github.event.pull_request.head.sha }}
           impact-policy: .github/skillroll-impact.toml
-          concurrency: ${{ vars.SKILLROLL_EVAL_CONCURRENCY || '4' }}
+          concurrency: ${{ vars.SKILLROLL_EVAL_CONCURRENCY || '1' }}
           samples: 1
           with-skill-control: false
           run-commands: false

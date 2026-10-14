@@ -139,6 +139,13 @@ Automatic live runs use that same exact candidate's local Action only for
 owner-authored, same-repository PRs with `SKILLROLL_LIVE_EVAL=true`, inside the
 `skillroll-eval` environment. Candidate Python and Action code receive the eval
 key: configure environment reviewers and review that revision before approving.
+
+This repository defaults automatic and manual live runs to concurrency 1 because
+observed parallel requests exceeded the provider account's in-flight reservation
+budget. Set `SKILLROLL_EVAL_CONCURRENCY` or the manual concurrency input to raise
+the cap after checking the account's available budget; generated downstream
+workflows retain their default of four.
+
 Fork PRs never enter that credentialed path. This fixes the gap where changing
 harness source still executed the old published harness.
 

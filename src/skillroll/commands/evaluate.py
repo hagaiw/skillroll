@@ -345,6 +345,7 @@ def _result_summary(
     profile_name: str | None = None,
     profile_purpose: str | None = None,
     skill_available: bool = True,
+    redactor: SecretRedactor | None = None,
 ) -> dict[str, object]:
     overall_explanation, next_action = _overall_text(
         outcome, judged, assertions, checks, failure
@@ -370,7 +371,7 @@ def _result_summary(
         else check_failure.detail or "A repository check could not finish."
     )
     technical_details = (
-        failure.details
+        bounded_failure_details(failure, redactor or SecretRedactor(SecretValue("")))
         if failure is not None
         else ()
         if check_failure is None
@@ -766,6 +767,7 @@ async def evaluate_repository(
                         profile_name=profile.profile_name,
                         profile_purpose=profile.profile_purpose,
                         skill_available=skill_available,
+                        redactor=redactor,
                     )
                     store.append(
                         directory,
