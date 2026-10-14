@@ -96,6 +96,8 @@ def test_complete_release_keeps_credentials_and_tested_bytes_separate() -> None:
     assert '-f candidate_run="$GITHUB_RUN_ID"' in persist
     assert "AUTHORIZATION: basic" in persist
     assert "mapfile" not in persist  # macOS ships Bash 3.2.
+    assert publish[-1]["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert jobs["publish"]["permissions"]["checks"] == "read"
     wait = publish[-1]["run"]
     assert "run['databaseId'] not in previous" in wait
     assert "run['displayTitle'] == expected" in wait

@@ -238,6 +238,7 @@ jobs:
     environment: release-write
     permissions:
       actions: read
+      checks: read
       contents: read
     steps:
       # actions/download-artifact v8.0.1
@@ -300,8 +301,9 @@ jobs:
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           echo "Publication dispatched for $TAG. Follow the Release workflow for attestation and PyPI."
       - name: Wait for publication and report its result
+        # gh run watch needs checks:read, unavailable to fine-grained PATs.
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare.outputs.tag }}
           COMMIT: ${{ needs.gates.outputs.commit }}
