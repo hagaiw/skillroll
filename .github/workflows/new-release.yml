@@ -260,7 +260,9 @@ jobs:
           print('\n'.join(tags))
           PYTHON
           plugin_tags=()
-          while IFS= read -r tag; do plugin_tags+=("$tag"); done < plugin-tags.txt
+          while IFS= read -r tag; do
+            plugin_tags+=("${tag%$'\r'}")
+          done < plugin-tags.txt
           for tag in "${plugin_tags[@]}"; do refs+=("$COMMIT:refs/tags/$tag"); done
           remote="$(git -C handoff ls-remote origin refs/heads/main | cut -f1)"
           if [ "$remote" != "$COMMIT" ]; then
