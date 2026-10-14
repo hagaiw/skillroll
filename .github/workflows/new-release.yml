@@ -102,10 +102,12 @@ jobs:
           version="$(python -c 'import json; print(json.load(open("release-metadata.json"))["version"])')"
           tag="$(python -c 'import json; print(json.load(open("release-metadata.json"))["tag"])')"
           git commit -m "Prepare release $tag"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "candidate=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          {
+            echo "base=$base"
+            echo "candidate=$(git rev-parse HEAD)"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
       - run: uv run coverage run -m pytest
       - run: uv run coverage report --fail-under=100
       - run: uv run coverage json -o coverage.json
@@ -257,7 +259,8 @@ jobs:
           assert 'flow-runner--v' + os.environ['VERSION'] in tags
           print('\n'.join(tags))
           PYTHON
-          mapfile -t plugin_tags < plugin-tags.txt
+          plugin_tags=()
+          while IFS= read -r tag; do plugin_tags+=("$tag"); done < plugin-tags.txt
           for tag in "${plugin_tags[@]}"; do refs+=("$COMMIT:refs/tags/$tag"); done
           remote="$(git -C handoff ls-remote origin refs/heads/main | cut -f1)"
           if [ "$remote" != "$COMMIT" ]; then
@@ -285,7 +288,7 @@ jobs:
         shell: bash
         run: |
           # Match the immutable commit/ref, not the latest run in the repository.
-          for attempt in $(seq 1 30); do
+          for _attempt in $(seq 1 30); do
             gh run list --workflow release.yml --repo "$GH_REPO" --event workflow_dispatch \
               --commit "$COMMIT" --json databaseId,headBranch,displayTitle > publisher-runs.json
             run="$(python - <<'PYTHON'

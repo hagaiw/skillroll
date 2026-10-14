@@ -19,6 +19,10 @@ from conftest import ROOT
         (
             [
                 ".github/workflows/release.yml",
+                ".github/workflows/new-release.yml",
+                "tools/prepare_release.py",
+                "tools/finalize_release.py",
+                "tools/verify_prepared_release.py",
                 "tests/test_release_automation.py",
                 "docs/releasing.md",
                 ".github/CONTRIBUTING.md",
@@ -37,6 +41,7 @@ from conftest import ROOT
         ([".github/workflows/unknown.yml"], True),
         (["docs/guide.md", "plugins/demo/skills/demo/evals/test.eval.md"], True),
         (["plugins/demo/SKILL.md", "docs/moved-skill.md"], True),
+        (["tools/unknown_release.py"], True),
         (["unknown-file"], True),
     ],
 )

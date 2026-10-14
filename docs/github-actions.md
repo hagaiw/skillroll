@@ -68,7 +68,8 @@ See the [security model](security.md) and [results](results.md).
 
 This repository keeps offline validation enabled for every PR, but skips automatic
 live evals when all changed paths are under `docs/` or `tests/`, or are the known
-release/CI workflows and top-level documentation listed in the workflow's
+release/CI workflows, the explicit version preparation/evidence helpers,
+and top-level documentation listed in the workflow's
 `live-scope` step. These exemptions are specific to this repository and are not
 added to workflows generated for other repositories.
 

@@ -85,6 +85,7 @@ def test_complete_release_keeps_credentials_and_tested_bytes_separate() -> None:
     assert '--ref "$TAG"' in persist
     assert '-f candidate_run="$GITHUB_RUN_ID"' in persist
     assert "AUTHORIZATION: basic" in persist
+    assert "mapfile" not in persist  # macOS ships Bash 3.2.
     wait = publish[-1]["run"]
     assert "run['databaseId'] not in previous" in wait
     assert "run['displayTitle'] == expected" in wait
@@ -206,6 +207,10 @@ def test_atomic_persistence_never_partially_pushes_or_dispatches(
         assert result.returncode != 0
         assert git(remote, "show-ref") == before
         assert not (tmp_path / "dispatch-receipt").exists()
+        if conflict == "main":
+            assert "main advanced; no publication dispatched." in result.stdout
+        else:
+            assert "rejected" in result.stderr
     else:
         assert result.returncode == 0, (result.stdout, result.stderr)
         for ref in [

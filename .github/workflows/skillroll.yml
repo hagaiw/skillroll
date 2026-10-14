@@ -72,6 +72,9 @@ jobs:
           # Repository-specific exemptions, not rules for downstream skills repos.
           offline_files = {
               ".github/workflows/ci.yml", ".github/workflows/release.yml",
+              ".github/workflows/new-release.yml",
+              "tools/prepare_release.py", "tools/finalize_release.py",
+              "tools/verify_prepared_release.py",
               ".github/CONTRIBUTING.md", ".github/SECURITY.md", ".github/SUPPORT.md",
               "README.md", "AGENTS.md", "PRINCIPLES.md", "LICENSE",
           }
