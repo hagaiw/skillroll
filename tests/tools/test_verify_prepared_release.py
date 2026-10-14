@@ -15,24 +15,30 @@ from skillroll.release import artifact_manifest, unsigned_provenance
 from tools.verify_prepared_release import main, verify
 
 
-def fixture(root: Path, version: str = __version__) -> tuple[Path, Path]:
+def fixture(
+    root: Path, version: str | None = None, *, root_version: str = __version__
+) -> tuple[Path, Path]:
+    canonical = root / "src/skillroll/_version.py"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text(f'__version__ = "{root_version}"\n')
+    version = root_version if version is None else version
     artifacts, evidence = root / "dist", root / "evidence"
     artifacts.mkdir()
     evidence.mkdir()
-    wheel = artifacts / f"skillroll-{__version__}-py3-none-any.whl"
+    wheel = artifacts / f"skillroll-{root_version}-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr(
             "skillroll.dist-info/METADATA", f"Name: skillroll\nVersion: {version}\n"
         )
-    (artifacts / f"skillroll-{__version__}.tar.gz").write_bytes(b"source")
+    (artifacts / f"skillroll-{root_version}.tar.gz").write_bytes(b"source")
     manifest = artifact_manifest(artifacts.iterdir())
     (evidence / "SHA256SUMS.json").write_bytes(manifest)
     (evidence / "provenance.json").write_bytes(
-        unsigned_provenance(__version__, "a" * 40, manifest)
+        unsigned_provenance(root_version, "a" * 40, manifest)
     )
     digest = json.loads(manifest)[wheel.name]
     root.joinpath("release-gates.toml").write_text(
-        f'schema_version=1\nversion="{__version__}"\n'
+        f'schema_version=1\nversion="{root_version}"\n'
         '[[gates]]\nname="installed-live-e2e"\nstate="PASS"\n'
         'detail="https://github.com/hagaiw/skillroll/actions/runs/123; '
         f'wheel SHA256 {digest}; passed"\n'
@@ -201,4 +207,38 @@ def test_gate_wheel_digest_cannot_be_replaced(tmp_path: Path) -> None:
         )
     )
     with pytest.raises(ValueError, match="different wheel bytes"):
+        verify(tmp_path, artifacts, evidence, "a" * 40, "123")
+
+
+def test_verifier_reads_the_selected_checkout_version(tmp_path: Path) -> None:
+    artifacts, evidence = fixture(tmp_path, root_version="1.2.3")
+    verify(tmp_path, artifacts, evidence, "a" * 40, "123")
+
+
+@pytest.mark.parametrize("kind", ["missing", "directory", "malformed", "duplicate"])
+def test_candidate_requires_one_regular_canonical_version(
+    tmp_path: Path, kind: str
+) -> None:
+    artifacts, evidence = fixture(tmp_path)
+    path = tmp_path / "src/skillroll/_version.py"
+    if kind in {"missing", "directory"}:
+        path.unlink()
+        if kind == "directory":
+            path.mkdir()
+    elif kind == "malformed":
+        path.write_text("no version")
+    else:
+        path.write_text(path.read_text() * 2)
+    with pytest.raises(ValueError, match="version"):
+        verify(tmp_path, artifacts, evidence, "a" * 40, "123")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows symlink privilege")
+def test_candidate_canonical_symlink_is_rejected(tmp_path: Path) -> None:
+    artifacts, evidence = fixture(tmp_path)
+    path = tmp_path / "src/skillroll/_version.py"
+    target = tmp_path / "outside-version.py"
+    path.rename(target)
+    path.symlink_to(target)
+    with pytest.raises(ValueError, match="nonsymlink"):
         verify(tmp_path, artifacts, evidence, "a" * 40, "123")
