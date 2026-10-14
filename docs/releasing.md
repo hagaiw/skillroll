@@ -4,7 +4,11 @@
 
 Open **Actions → Release new version → Run workflow**, select **main**, and run.
 The default is a patch release. Choose `minor` or `major`, or enter an explicit
-new `MAJOR.MINOR.PATCH` / `MAJOR.MINOR.PATCHrcN` version without `v`.
+new stable `MAJOR.MINOR.PATCH` version without `v`.
+
+The complete workflow rejects prerelease versions before changing candidate files.
+Python's `rcN` format is incompatible with Claude's dependency constraints;
+prerelease automation requires an explicit Python-to-SemVer mapping first.
 
 The workflow prepares synchronized package and plugin versions, updates pinned
 references, runs the offline quality gates, and builds the wheel and source
@@ -58,7 +62,9 @@ checks, rather than the full live repository eval suite.
 
 The installed package is imported from a clean environment. Its bytes are
 carried unchanged into publication, with wheel digests, test reports, and the
-final tagged source SHA recorded in release evidence. The final evidence-only
+final tagged source SHA recorded in release evidence. A checksum manifest frozen
+before the integration checks is compared with the complete artifact inventory
+before either gate can be marked PASS. The final evidence-only
 commit changes a file excluded from both distributions. Publication runs are
 serialized and are never cancelled by a new release. GitHub can replace older
 pending runs, so inspect the queue before requesting several releases together.
@@ -76,7 +82,9 @@ main still matches the selected base. Repository rules can reject the push.
 Git and PyPI publication are separate operations. If dispatch or publication
 fails after persistence, the version commit and tags remain. Inspect the linked
 run and its evidence before retrying. Re-run failed jobs when the publisher has
-already started. If only GitHub release creation failed, this retries that job
+already started. Re-running the entire parent release is not a general recovery
+mechanism: uploads and release creation cannot safely be repeated indiscriminately.
+If only GitHub release creation failed, this retries that job
 without uploading to PyPI again. PyPI versions cannot be overwritten; a partial
 upload needs investigation rather than blindly repeating publication.
 

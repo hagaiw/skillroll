@@ -61,6 +61,7 @@ def finalize(
     candidate_commit: str,
     run_url: str,
     artifacts: Path,
+    expected_manifest: Path,
 ) -> dict[str, str]:
     """Validate integration receipts and artifacts before replacing blocked gates."""
     if root.is_symlink() or not root.is_dir():
@@ -105,7 +106,14 @@ def finalize(
         or str(source_version) != metadata.version
     ):
         raise ValueError("candidate artifact names must match the canonical version")
-    manifest = json.loads(artifact_manifest((wheel, source)))
+    _regular(expected_manifest)
+    actual = artifact_manifest(artifacts.iterdir())
+    manifest = json.loads(actual)
+    if (
+        set(manifest) != {wheel.name, source.name}
+        or expected_manifest.read_bytes() != actual
+    ):
+        raise ValueError("candidate artifacts changed since their preparation checks")
     digest = manifest[wheel.name]
     detail = (
         f"Version {metadata.version}; candidate {candidate_commit}; "
@@ -130,6 +138,7 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--candidate-commit", required=True)
     parser.add_argument("--run-url", required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
+    parser.add_argument("--expected-manifest", type=Path, required=True)
     values = parser.parse_args(arguments)
     try:
         result = finalize(
@@ -139,6 +148,7 @@ def main(arguments: list[str] | None = None) -> int:
             values.candidate_commit,
             values.run_url,
             values.artifacts,
+            values.expected_manifest,
         )
     except (OSError, ValueError) as error:
         parser.exit(2, f"Release evidence could not be recorded: {error}\n")

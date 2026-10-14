@@ -57,6 +57,13 @@ def test_complete_release_keeps_credentials_and_tested_bytes_separate() -> None:
     jobs = complete()["jobs"]
     assert jobs["prepare"]["needs"] == "authorize"
     assert jobs["gates"]["needs"] == "prepare"
+    assert "github.sha" in jobs["prepare"]["steps"][0]["with"]["ref"]
+    assert (
+        jobs["prepare"]["outputs"]["manifest"] == "${{ steps.freeze.outputs.sha256 }}"
+    )
+    assert any(
+        "--no-create-gitignore" in s.get("run", "") for s in jobs["prepare"]["steps"]
+    )
     assert "!inputs.dry_run" in jobs["gates"]["if"]
     assert jobs["publish"]["needs"] == ["prepare", "gates"]
     for name in ("prepare", "gates"):
@@ -75,6 +82,9 @@ def test_complete_release_keeps_credentials_and_tested_bytes_separate() -> None:
     assert "--junitxml=installed-live.xml" in gate["run"]
     final = next(s for s in jobs["gates"]["steps"] if s.get("id") == "finalize")
     assert '[ "$(git diff --name-only)" = release-gates.toml ]' in final["run"]
+    assert final["env"]["MANIFEST_SHA256"] == "${{ needs.prepare.outputs.manifest }}"
+    assert "sha256sum --check --strict" in final["run"]
+    assert "--expected-manifest candidate-SHA256SUMS.json" in final["run"]
     assert "git bundle create verified-candidate.bundle HEAD" in final["run"]
     publish = jobs["publish"]["steps"]
     assert not any("checkout@" in s.get("uses", "") for s in publish)
@@ -86,6 +96,8 @@ def test_complete_release_keeps_credentials_and_tested_bytes_separate() -> None:
     assert '-f candidate_run="$GITHUB_RUN_ID"' in persist
     assert "AUTHORIZATION: basic" in persist
     assert "mapfile" not in persist  # macOS ships Bash 3.2.
+    assert publish[-1]["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert jobs["publish"]["permissions"]["checks"] == "read"
     wait = publish[-1]["run"]
     assert "run['databaseId'] not in previous" in wait
     assert "run['displayTitle'] == expected" in wait

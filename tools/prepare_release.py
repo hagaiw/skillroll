@@ -47,7 +47,13 @@ def _target(current: str, bump: str, explicit: str | None) -> str:
             target = f"{major}.{minor}.{patch + 1}"
     else:
         target = explicit
-    if _version(target) <= parsed:
+    target_version = _version(target)
+    if target_version.is_prerelease:
+        raise ValueError(
+            "Complete releases require a stable MAJOR.MINOR.PATCH version; "
+            "Python rcN versions are incompatible with Claude dependency constraints."
+        )
+    if target_version <= parsed:
         raise ValueError(
             "release version must be strictly greater than current version"
         )

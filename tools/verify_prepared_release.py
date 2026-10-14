@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import zipfile
 from email.parser import Parser
 from pathlib import Path
@@ -19,8 +20,16 @@ def verify(
     root: Path, artifacts: Path, evidence: Path, commit: str, run_id: str
 ) -> None:
     """Bind version, final commit, fresh gate run, and package bytes before signing."""
-    metadata = release_metadata()
-    gates = load_external_gates(root / "release-gates.toml")
+    canonical = root / "src/skillroll/_version.py"
+    if canonical.is_symlink() or not canonical.is_file():
+        raise ValueError("Candidate version must be a regular nonsymlink file.")
+    versions = re.findall(
+        r'^__version__ = "([^"\n]+)"$', canonical.read_text(), re.MULTILINE
+    )
+    if len(versions) != 1:
+        raise ValueError("Candidate must contain exactly one canonical version.")
+    metadata = release_metadata(versions[0])
+    gates = load_external_gates(root / "release-gates.toml", version=metadata.version)
     marker = f"https://github.com/hagaiw/skillroll/actions/runs/{run_id};"
     if not run_id.isdigit() or any(
         g.state != "PASS" or marker not in g.detail for g in gates

@@ -80,7 +80,7 @@ def test_release_files_are_lockstep_and_known_field_mismatch_is_reported(
 
     plugin = root / "plugins/flow-runner/.claude-plugin/plugin.json"
     plugin.write_text(
-        plugin.read_text().replace(f'"{__version__}"', '"999.0.0"'),
+        plugin.read_text().replace(f'"{__version__}"', f'"{__version__}.post1"'),
         encoding="utf-8",
     )
     report = validate_release_files(root)
@@ -149,7 +149,7 @@ def test_version_bound_release_gate_file_is_strict_and_current(tmp_path: Path) -
             "top-level",
         ),
         (f"schema_version=2\nversion='{__version__}'\ngates=[]", "schema_version"),
-        ("schema_version=1\nversion='9.9.9'\ngates=[]", "canonical"),
+        (f"schema_version=1\nversion='{__version__}.post1'\ngates=[]", "canonical"),
         (f"schema_version=1\nversion='{__version__}'\ngates='bad'", "gates array"),
         (
             f"schema_version=1\nversion='{__version__}'\ngates=[1]",

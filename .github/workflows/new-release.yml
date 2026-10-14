@@ -9,7 +9,7 @@ on:
         options: [patch, minor, major]
         default: patch
       version:
-        description: Optional explicit new version, without v
+        description: Optional stable MAJOR.MINOR.PATCH version, without v
         type: string
         required: false
       dry_run:
@@ -68,11 +68,12 @@ jobs:
       candidate: ${{ steps.prepare.outputs.candidate }}
       version: ${{ steps.prepare.outputs.version }}
       tag: ${{ steps.prepare.outputs.tag }}
+      manifest: ${{ steps.freeze.outputs.sha256 }}
     steps:
       # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || 'main' }}
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       # actions/setup-python v7.0.0
@@ -121,8 +122,20 @@ jobs:
           status=0
           uv run skillroll validate --all || status="$?"
           [ "$status" -eq 0 ] || [ "$status" -eq 2 ]
-      - run: uv build --out-dir dist
+      - run: uv build --out-dir dist --clear --no-create-gitignore
       - run: uv run pytest -q tests/test_package_e2e.py
+      - id: freeze
+        name: Freeze prepared artifact bytes before integration checks
+        run: |
+          uv run python - <<'PYTHON'
+          import hashlib, os
+          from pathlib import Path
+          from skillroll.release import artifact_manifest
+          manifest = artifact_manifest(Path('dist').iterdir())
+          Path('candidate-SHA256SUMS.json').write_bytes(manifest)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'sha256={hashlib.sha256(manifest).hexdigest()}\n')
+          PYTHON
       - run: git bundle create source-candidate.bundle HEAD
       # actions/upload-artifact v7.0.1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -131,6 +144,7 @@ jobs:
           path: |
             source-candidate.bundle
             release-metadata.json
+            candidate-SHA256SUMS.json
             dist
           if-no-files-found: error
 
@@ -182,9 +196,13 @@ jobs:
         name: Record fresh evidence and freeze the final commit
         env:
           CANDIDATE: ${{ needs.prepare.outputs.candidate }}
+          MANIFEST_SHA256: ${{ needs.prepare.outputs.manifest }}
         shell: bash
         run: |
+          [[ "$MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          printf '%s  %s\n' "$MANIFEST_SHA256" candidate-SHA256SUMS.json | sha256sum --check --strict
           uv run python tools/finalize_release.py --root . --artifacts dist \
+            --expected-manifest candidate-SHA256SUMS.json \
             --live-report installed-live.xml --claude-report claude-install.xml \
             --candidate-commit "$CANDIDATE" \
             --run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
@@ -207,6 +225,7 @@ jobs:
           path: |
             verified-candidate.bundle
             release-metadata.json
+            candidate-SHA256SUMS.json
             dist
             release-evidence
             installed-live.xml
@@ -219,6 +238,7 @@ jobs:
     environment: release-write
     permissions:
       actions: read
+      checks: read
       contents: read
     steps:
       # actions/download-artifact v8.0.1
@@ -281,8 +301,9 @@ jobs:
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           echo "Publication dispatched for $TAG. Follow the Release workflow for attestation and PyPI."
       - name: Wait for publication and report its result
+        # gh run watch needs checks:read, unavailable to fine-grained PATs.
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare.outputs.tag }}
           COMMIT: ${{ needs.gates.outputs.commit }}

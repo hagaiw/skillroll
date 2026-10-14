@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from skillroll import __version__
 from skillroll.marketplace import _no_symlink_path, validate_marketplace
 
@@ -86,20 +88,31 @@ def test_reports_malformed_and_unsafe_marketplace_boundaries(tmp_path: Path) -> 
     assert {item.code for item in report.diagnostics} >= {"SCM1002", "SCM1003"}
 
 
+@pytest.mark.parametrize(
+    "candidate_version", [__version__, "0.2.0", "1.0.0", "0.2.0rc1"]
+)
 def test_reports_manifest_identity_version_and_dependency_problems(
     tmp_path: Path,
+    candidate_version: str,
 ) -> None:
-    _write_plugin(tmp_path, "flow-runner")
-    _write_plugin(tmp_path, "broken", version="0.2.0", dependencies=[{"name": "x"}])
+    _write_plugin(tmp_path, "flow-runner", version=candidate_version)
+    _write_plugin(
+        tmp_path,
+        "broken",
+        version=f"{candidate_version}.post1",
+        dependencies=[{"name": "x"}],
+    )
     _write_plugin(
         tmp_path,
         "cycle",
-        dependencies=[{"name": "other", "version": f"={__version__}"}],
+        version=candidate_version,
+        dependencies=[{"name": "other", "version": f"={candidate_version}"}],
     )
     _write_plugin(
         tmp_path,
         "other",
-        dependencies=[{"name": "cycle", "version": f"={__version__}"}],
+        version=candidate_version,
+        dependencies=[{"name": "cycle", "version": f"={candidate_version}"}],
     )
     _write_marketplace(
         tmp_path,
@@ -111,7 +124,7 @@ def test_reports_manifest_identity_version_and_dependency_problems(
         ],
     )
 
-    report = validate_marketplace(tmp_path, __version__)
+    report = validate_marketplace(tmp_path, candidate_version)
 
     codes = {item.code for item in report.diagnostics}
     assert {"SCM1004", "SCM1005", "SCM1006", "SCM1007"} <= codes
