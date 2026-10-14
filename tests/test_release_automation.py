@@ -106,9 +106,11 @@ def test_release_automation_preserves_publication_boundaries() -> None:
     data = workflow()
     jobs = data["jobs"]
     build = jobs["build"]
-    assert "merged == true" in build["if"]
-    assert "head.repo.full_name == github.repository" in build["if"]
-    assert "contains(github.event.pull_request.labels.*.name, 'release')" in build["if"]
+    complete = yaml.safe_load((ROOT / ".github/workflows/new-release.yml").read_text())
+    eligibility = complete["jobs"]["authorize"]["if"]
+    assert "merged == true" in eligibility
+    assert "head.repo.full_name == github.repository" in eligibility
+    assert "contains(github.event.pull_request.labels.*.name, 'release')" in eligibility
     assert data["concurrency"]["cancel-in-progress"] is False
     checkout = build["steps"][0]["with"]
     assert "merge_commit_sha" in checkout["ref"]
@@ -164,7 +166,7 @@ def test_offline_validation_only_accepts_pass_or_incomplete(status: int) -> None
         ("release", False, False, False, False, "publish"),
         ("workflow_dispatch", True, False, False, False, "publish"),
         ("workflow_dispatch", False, False, False, False, "123"),
-        ("pull_request", False, True, True, True, "publish"),
+        ("pull_request", False, True, True, True, "123"),
         ("pull_request", False, False, True, True, "123"),
         ("pull_request", False, True, False, True, "123"),
         ("pull_request", False, True, True, False, "123"),

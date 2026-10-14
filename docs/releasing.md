@@ -1,78 +1,93 @@
 # Releasing SkillRoll
 
-## Build and eval checks
-
-`CI` runs offline tests on Linux, macOS, and Windows, checks 100% statement and
-branch coverage plus function coverage, Ruff, strict mypy, and Action syntax,
-and builds and tests the package. `SkillRoll` validates changed evals on PRs.
-Owner-authored, same-repository PRs run the affected live cases when the reviewed
-impact plan selects cases and `SKILLROLL_LIVE_EVAL=true`, using the
-`skillroll-eval` environment. Its manual
-workflow can evaluate a reviewed revision. These model-backed runs are separate
-from release automation and can spend inference budget.
-
-## Prepare a version
-
-Prepare and review the release candidate in a PR before publishing:
-
-1. Set `src/skillroll/_version.py` to the new `MAJOR.MINOR.PATCH` or
-   `MAJOR.MINOR.PATCHrcN` version.
-2. Update all `plugins/*/.claude-plugin/plugin.json` versions and exact
-   `flow-runner` dependency versions together. Refresh `uv.lock` with `uv lock`.
-3. Update checked-in Action references and release documentation as appropriate.
-4. Run the installed-wheel live E2E and isolated Claude dependency-install
-   checks. Record actual results for this version in `release-gates.toml`.
-   Both gates must be `PASS`; do not copy old evidence to a new version.
-5. Require/review the PR's CI and relevant live eval results before merging.
-
-Automation publishes the prepared version; it does not choose a bump or invent
-external gate evidence. The existing PyPI trusted publisher must allow
-`.github/workflows/release.yml` and the `pypi` environment. Keep environment
-reviewers and branch protections configured for the desired release policy.
-
 ## Release from GitHub
 
-After merging the candidate, open **Actions → Release → Run workflow**:
+Open **Actions → Release new version → Run workflow**, select **main**, and run.
+The default is a patch release. Choose `minor` or `major`, or enter an explicit
+new `MAJOR.MINOR.PATCH` / `MAJOR.MINOR.PATCHrcN` version without `v`.
 
-- Select **main**.
-- Enable **publish**.
-- Enter the exact prepared **version**, without the `v` prefix.
+The workflow prepares synchronized package and plugin versions, updates pinned
+references, runs the offline quality gates, and builds the wheel and source
+archive. It then tests that exact wheel with a live adoption eval and checks
+Claude's isolated dependency installation. Only passing, non-skipped results
+produce fresh release evidence. It commits the prepared version and evidence,
+atomically creates the package and plugin tags, and automatically starts the
+**Release** publisher at the immutable version tag. The publisher verifies the
+original checked artifacts, attests them, publishes to PyPI, and creates the
+GitHub release. The first workflow waits for that publication result.
 
-Leaving **publish** off runs an offline rehearsal only. Rehearsals may run on
-other branches. They upload artifacts and readiness evidence without publishing.
+No separate version-preparation PR or manually edited PASS record is needed.
+Configured environment reviewers may still require approval. Live checks spend
+inference budget. Enable **dry_run** to prepare and check the build without live
+checks, remote writes, tags, or publication; its gates remain blocked.
+
+## One-time configuration
+
+- In **release-write**, configure `RELEASE_TOKEN` for this repository with
+  **Contents**, **Workflows**, and **Actions** write permissions. Use a dedicated
+  account/token allowed to make the release commit under your existing branch
+  rules. The built-in token cannot update pinned workflow references or start
+  the publisher this way. The workflow does not disable branch protection.
+- In **skillroll-eval**, configure `SKILLROLL_API_KEY` for the installed-wheel
+  live adoption test. The isolated Claude install check does not require a
+  Claude inference key.
+- Keep the PyPI trusted publisher configured for `.github/workflows/release.yml`
+  and the **pypi** environment. Keep any desired environment reviewers and tag
+  policies configured. Allow the publisher to run at version tags.
+
+The release write credential is checked before live inference. Repository code
+runs in separate jobs without that credential; the write job only persists the
+verified Git bundle and dispatches publication. The PyPI job has its own OIDC
+permission and executes no repository code.
 
 ## Release on merge
 
-Create a repository label named **release** and apply it to the prepared release
-PR before merging into `main`. A merged, labeled PR from this repository starts
-publication automatically, using its exact merge commit. An unlabeled PR,
-closed-but-unmerged PR, or fork PR does not publish. Adding the label after merge
-does not trigger a release; use the manual workflow instead.
+Create the **release** label and apply it to a same-repository PR before merging
+into `main`. Its merge triggers the same complete flow with a patch increment.
+Unlabeled, unmerged, or fork PRs do not release. Adding a label after merging does
+not trigger a release; use **Run workflow** instead. Use the manual form for a
+minor, major, or explicit release candidate version.
 
-## Publication and recovery
+## Checks and concurrency
 
-Every release builds and tests the selected revision, validates all evals offline,
-checks package/plugin version agreement, verifies wheel metadata and checksums,
-and checks the version-bound external gates. Offline validation proves structure,
-not behavior. As in the existing SkillRoll workflow, `INCOMPLETE` is accepted
-when repository-declared commands are deliberately not run. Publishing requests fail if readiness is blocked. Evidence records
-the actual checked-out commit.
+Every new release runs the complete offline quality gates and both release
+integration checks. It validates all eval structure without executing declared
+repository commands; `INCOMPLETE` is accepted for those commands. Structural
+validation does not prove model behavior. Release integration checks are bounded
+checks, rather than the full live repository eval suite.
 
-The workflow attests the built artifacts, publishes those artifacts to PyPI
-through the protected `pypi` environment, then creates `vVERSION` and a GitHub
-release with generated notes. Release candidates are marked as prereleases.
-Publication runs are serialized; a running release is never cancelled by a new
-request. Rehearsals and closed PRs that do not publish use separate groups, so
-they cannot displace a queued publication. GitHub may replace an older pending run with a newer pending run, so
-check the Actions queue when merging multiple release PRs close together.
+The installed package is imported from a clean environment. Its bytes are
+carried unchanged into publication, with wheel digests, test reports, and the
+final tagged source SHA recorded in release evidence. The final evidence-only
+commit changes a file excluded from both distributions. Publication runs are
+serialized and are never cancelled by a new release. GitHub can replace older
+pending runs, so inspect the queue before requesting several releases together.
 
-The GitHub release is created with `GITHUB_TOKEN`, so it does not trigger another
-Release or SkillRoll run. Offline eval validation is included in the build for
-this reason. Manually publishing a GitHub release still invokes the existing
-release-event path, which verifies the tag matches the package version.
+Normal PR CI remains separate. Main pushes run CI, while the package and plugin
+tag pushes do not duplicate the offline CI matrix.
 
-Tags are never moved: an existing tag must point at the built commit. Versions
-already uploaded to PyPI cannot be overwritten. If publication fails, inspect
-the failed job and evidence before retrying. If only GitHub release creation
-fails after PyPI succeeds, use **Re-run failed jobs**, not a fresh publication
-run. This retries release creation without uploading the package again.
+## Recovery and advanced publication
+
+Failures before persistence leave main, tags, and PyPI unchanged. If main moves
+while the checks run, persistence fails; start a new run against the updated
+main. Atomic persistence never moves an existing release tag and checks that
+main still matches the selected base. Repository rules can reject the push.
+
+Git and PyPI publication are separate operations. If dispatch or publication
+fails after persistence, the version commit and tags remain. Inspect the linked
+run and its evidence before retrying. Re-run failed jobs when the publisher has
+already started. If only GitHub release creation failed, this retries that job
+without uploading to PyPI again. PyPI versions cannot be overwritten; a partial
+upload needs investigation rather than blindly repeating publication.
+
+If dispatch itself failed, the advanced **Release → Run workflow** form can
+publish the existing version tag: enable `publish`, enter its exact `version`,
+and enter the successful preparation run ID as `candidate_run`. This verifies
+that run's successful preparation/gate jobs, matching evidence, source SHA, and
+artifact hashes before using its artifacts. Artifacts must still be retained.
+
+The advanced form also retains offline rehearsal (`publish` off) and publication
+of a separately prepared version from main with version-bound PASS evidence.
+Manually publishing a GitHub release invokes the release-event path and checks
+that the tag matches the canonical package version. These are recovery and
+advanced paths; **Release new version** is the normal complete release entry.

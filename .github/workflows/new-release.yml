@@ -1,0 +1,310 @@
+name: Release new version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version increment (ignored when an explicit version is entered)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: Optional explicit new version, without v
+        type: string
+        required: false
+      dry_run:
+        description: Prepare/build only; no paid checks, remote writes, or publication
+        type: boolean
+        default: false
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    complete-release-${{
+      ((github.event_name == 'workflow_dispatch' && !inputs.dry_run) ||
+       (github.event.pull_request.merged == true &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'release')))
+      && 'publish' || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'release'))
+    runs-on: ubuntu-latest
+    environment: release-write
+    steps:
+      - name: Check publication prerequisites before spending inference
+        env:
+          SELECTED_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$SELECTED_REF" != refs/heads/main ]; then
+            echo 'Run the complete release from main.'
+            exit 1
+          fi
+          if [ "$DRY_RUN" != true ] && [ -z "$RELEASE_TOKEN" ]; then
+            echo 'Configure RELEASE_TOKEN in release-write with Contents, Workflows, and Actions write permissions.'
+            exit 1
+          fi
+
+  prepare:
+    needs: authorize
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.prepare.outputs.base }}
+      candidate: ${{ steps.prepare.outputs.candidate }}
+      version: ${{ steps.prepare.outputs.version }}
+      tag: ${{ steps.prepare.outputs.tag }}
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || 'main' }}
+          fetch-depth: 0
+          persist-credentials: false
+      # actions/setup-python v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      # astral-sh/setup-uv v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - run: uv sync --all-groups --locked
+      - id: prepare
+        name: Prepare a synchronized new version with blocked gates
+        env:
+          BUMP: ${{ inputs.bump || 'patch' }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          base="$(git rev-parse HEAD)"
+          remote="$(git ls-remote origin refs/heads/main | cut -f1)"
+          [ "$base" = "$remote" ] || { echo 'main advanced; start a new release run.'; exit 1; }
+          args=()
+          if [ -n "$REQUESTED_VERSION" ]; then args=(--version "$REQUESTED_VERSION"); fi
+          uv run python tools/prepare_release.py --root . --bump "$BUMP" "${args[@]}" > release-metadata.json
+          uv sync --all-groups --locked
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -u
+          version="$(python -c 'import json; print(json.load(open("release-metadata.json"))["version"])')"
+          tag="$(python -c 'import json; print(json.load(open("release-metadata.json"))["tag"])')"
+          git commit -m "Prepare release $tag"
+          {
+            echo "base=$base"
+            echo "candidate=$(git rev-parse HEAD)"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+      - run: uv run coverage run -m pytest
+      - run: uv run coverage report --fail-under=100
+      - run: uv run coverage json -o coverage.json
+      - run: uv run python tools/check_function_coverage.py coverage.json src/skillroll tools
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy --strict src tools
+      - name: Validate all eval structure
+        shell: bash
+        run: |
+          status=0
+          uv run skillroll validate --all || status="$?"
+          [ "$status" -eq 0 ] || [ "$status" -eq 2 ]
+      - run: uv build --out-dir dist
+      - run: uv run pytest -q tests/test_package_e2e.py
+      - run: git bundle create source-candidate.bundle HEAD
+      # actions/upload-artifact v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: source-candidate
+          path: |
+            source-candidate.bundle
+            release-metadata.json
+            dist
+          if-no-files-found: error
+
+  gates:
+    if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: skillroll-eval
+    outputs:
+      commit: ${{ steps.finalize.outputs.commit }}
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # actions/download-artifact v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: source-candidate
+      - name: Restore the exact checked candidate
+        env:
+          CANDIDATE: ${{ needs.prepare.outputs.candidate }}
+        run: |
+          git fetch source-candidate.bundle HEAD
+          git checkout --detach "$CANDIDATE"
+      # actions/setup-python v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      # astral-sh/setup-uv v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - run: uv sync --all-groups --locked
+      - name: Install the pinned official Claude CLI
+        run: npm install --global @anthropic-ai/claude-code@2.1.291
+      - name: Run the installed-wheel live adoption gate
+        env:
+          SKILLROLL_ADOPTION_E2E: '1'
+          SKILLROLL_ADOPTION_API_KEY: ${{ secrets.SKILLROLL_API_KEY }}
+          SKILLROLL_RELEASE_WHEEL: ${{ github.workspace }}/dist/skillroll-${{ needs.prepare.outputs.version }}-py3-none-any.whl
+        run: >-
+          uv run pytest -q -m live tests/test_adoption_real_e2e.py
+          --junitxml=installed-live.xml
+      - name: Run the isolated exact-version dependency installation gate
+        run: >-
+          uv run pytest -q -m external tests/test_phase7_claude_cli_e2e.py
+          --junitxml=claude-install.xml
+      - id: finalize
+        name: Record fresh evidence and freeze the final commit
+        env:
+          CANDIDATE: ${{ needs.prepare.outputs.candidate }}
+        shell: bash
+        run: |
+          uv run python tools/finalize_release.py --root . --artifacts dist \
+            --live-report installed-live.xml --claude-report claude-install.xml \
+            --candidate-commit "$CANDIDATE" \
+            --run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          # The gate file is excluded from wheel/sdist. No packaged source may
+          # change after the exact wheel's live check.
+          [ "$(git diff --name-only)" = release-gates.toml ]
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add release-gates.toml
+          git commit -m 'Record successful release gates'
+          commit="$(git rev-parse HEAD)"
+          uv run python tools/release_rehearsal.py --root . --artifacts dist \
+            --output release-evidence --commit "$commit"
+          git bundle create verified-candidate.bundle HEAD
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      # actions/upload-artifact v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: verified-release
+          path: |
+            verified-candidate.bundle
+            release-metadata.json
+            dist
+            release-evidence
+            installed-live.xml
+            claude-install.xml
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, gates]
+    runs-on: ubuntu-latest
+    environment: release-write
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      # actions/download-artifact v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: verified-release
+      - id: dispatch
+        name: Persist the checked version and dispatch its publisher
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BASE: ${{ needs.prepare.outputs.base }}
+          COMMIT: ${{ needs.gates.outputs.commit }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] && [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          git init -q handoff
+          git -C handoff fetch ../verified-candidate.bundle HEAD
+          [ "$(git -C handoff rev-parse FETCH_HEAD)" = "$COMMIT" ]
+          git -C handoff merge-base --is-ancestor "$BASE" "$COMMIT"
+          git -C handoff remote add origin "https://github.com/$GH_REPO.git"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          refs=("$COMMIT:refs/heads/main" "$COMMIT:refs/tags/$TAG")
+          python - <<'PYTHON' > plugin-tags.bin
+          import json, os, re, sys
+          metadata = json.load(open('release-metadata.json'))
+          assert metadata['version'] == os.environ['VERSION']
+          assert metadata['tag'] == os.environ['TAG']
+          tags = metadata['plugin_tags']
+          assert isinstance(tags, list) and tags and len(tags) == len(set(tags))
+          assert all(re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*--v' + re.escape(os.environ['VERSION']), tag) for tag in tags)
+          assert 'flow-runner--v' + os.environ['VERSION'] in tags
+          sys.stdout.buffer.write(b'\0'.join(tag.encode() for tag in tags) + b'\0')
+          PYTHON
+          plugin_tags=()
+          while IFS= read -r -d '' tag; do
+            plugin_tags+=("$tag")
+          done < plugin-tags.bin
+          for tag in "${plugin_tags[@]}"; do refs+=("$COMMIT:refs/tags/$tag"); done
+          remote="$(git -C handoff ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$remote" != "$COMMIT" ]; then
+            [ "$remote" = "$BASE" ] || { echo 'main advanced; no publication dispatched.'; exit 1; }
+            git -C handoff push --atomic --force-with-lease="refs/heads/main:$BASE" origin "${refs[@]}"
+          else
+            # Resume a failed dispatch without moving any existing refs.
+            for tag in "$TAG" "${plugin_tags[@]}"; do
+              [ "$(git -C handoff ls-remote origin "refs/tags/$tag" | cut -f1)" = "$COMMIT" ]
+            done
+          fi
+          previous="$(gh run list --workflow release.yml --repo "$GH_REPO" --event workflow_dispatch \
+            --commit "$COMMIT" --limit 100 --json databaseId --jq 'map(.databaseId)')"
+          gh workflow run release.yml --repo "$GH_REPO" --ref "$TAG" \
+            -f publish=true -f version="$VERSION" -f candidate_run="$GITHUB_RUN_ID"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          echo "Publication dispatched for $TAG. Follow the Release workflow for attestation and PyPI."
+      - name: Wait for publication and report its result
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          COMMIT: ${{ needs.gates.outputs.commit }}
+          PREVIOUS_RUNS: ${{ steps.dispatch.outputs.previous }}
+        shell: bash
+        run: |
+          # Match the immutable commit/ref, not the latest run in the repository.
+          for _attempt in $(seq 1 30); do
+            gh run list --workflow release.yml --repo "$GH_REPO" --event workflow_dispatch \
+              --commit "$COMMIT" --json databaseId,headBranch,displayTitle > publisher-runs.json
+            run="$(python - <<'PYTHON'
+          import json, os
+          previous = json.loads(os.environ['PREVIOUS_RUNS'])
+          expected = f"Publish {os.environ['TAG'].removeprefix('v')} (prepare #{os.environ['GITHUB_RUN_ID']})"
+          matches = [run['databaseId'] for run in json.load(open('publisher-runs.json'))
+              if run['databaseId'] not in previous and run['headBranch'] == os.environ['TAG']
+              and run['displayTitle'] == expected]
+          print(matches[0] if matches else '')
+          PYTHON
+          )"
+            if [ -n "$run" ]; then break; fi
+            sleep 2
+          done
+          [ -n "$run" ] || { echo 'Could not find dispatched publisher; inspect Release runs before retrying.'; exit 1; }
+          gh run watch "$run" --repo "$GH_REPO" --exit-status
