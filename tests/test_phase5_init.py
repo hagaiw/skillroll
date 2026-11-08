@@ -154,7 +154,7 @@ def test_init_creates_minimal_local_files_and_templates(tmp_path: Path) -> None:
     )
     assert (repository / ".gitignore").read_text(
         encoding="utf-8"
-    ) == ".skillroll/runs/\n.skillroll/experiments/\n"
+    ) == ".skillroll/runs/\n.skillroll/experiments/\n.skillroll/comparisons/\n"
     starter = (skill / "evals" / "first-use.eval.md").read_text(encoding="utf-8")
     assert "Write the request or task that triggers the skill" in starter
     assert "Dungeon Master" in starter
@@ -189,7 +189,7 @@ def test_init_upgrades_existing_artifact_ignore_rules(
     assert result.outcome is Outcome.PASS
     assert result.data["changed_paths"] == (".gitignore",)
     assert (repository / ".gitignore").read_text(encoding="utf-8") == (
-        ".skillroll/runs/\n.skillroll/experiments/\n"
+        ".skillroll/runs/\n.skillroll/experiments/\n.skillroll/comparisons/\n"
     )
     unreadable = tmp_path / "unreadable"
     make_skill(unreadable)
@@ -334,16 +334,17 @@ def test_templates_and_suggestion_are_stable_and_portable() -> None:
     )
     assert render_ignore("# local\r\n") == (
         b"# local\r\n.skillroll/runs/\r\n.skillroll/experiments/\r\n"
+        b".skillroll/comparisons/\r\n"
     )
     assert render_ignore(".skillroll/runs/\n") == (
-        b".skillroll/runs/\n.skillroll/experiments/\n"
+        b".skillroll/runs/\n.skillroll/experiments/\n.skillroll/comparisons/\n"
     )
     assert render_ignore(".skillroll/experiments/\n") == (
-        b".skillroll/experiments/\n.skillroll/runs/\n"
+        b".skillroll/experiments/\n.skillroll/runs/\n.skillroll/comparisons/\n"
     )
-    assert render_ignore(".skillroll/runs/\n.skillroll/experiments/\n") == (
-        b".skillroll/runs/\n.skillroll/experiments/\n"
-    )
+    assert render_ignore(
+        ".skillroll/runs/\n.skillroll/experiments/\n.skillroll/comparisons/\n"
+    ) == (b".skillroll/runs/\n.skillroll/experiments/\n.skillroll/comparisons/\n")
     assert b"Success criteria" in render_starter_case("edge-case")
 
 
@@ -727,10 +728,12 @@ def test_init_handles_existing_ignore_rule_and_evals_link(tmp_path: Path) -> Non
     assert run(repo=str(repository), skills_path="skills").outcome is Outcome.PASS
     assert (repository / ".gitignore").read_text(
         encoding="utf-8"
-    ) == ".skillroll/runs/\n.skillroll/experiments/\n"
+    ) == ".skillroll/runs/\n.skillroll/experiments/\n.skillroll/comparisons/\n"
     repository_complete = tmp_path / "repository-complete"
     make_skill(repository_complete)
-    complete_ignore = ".skillroll/runs/\n.skillroll/experiments/\n"
+    complete_ignore = (
+        ".skillroll/runs/\n.skillroll/experiments/\n.skillroll/comparisons/\n"
+    )
     (repository_complete / ".gitignore").write_text(complete_ignore, encoding="utf-8")
     assert (
         run(repo=str(repository_complete), skills_path="skills").outcome is Outcome.PASS

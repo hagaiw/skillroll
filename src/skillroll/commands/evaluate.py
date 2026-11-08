@@ -7,6 +7,7 @@ import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
+from time import perf_counter
 from typing import cast
 
 from skillroll.artifacts.records import (
@@ -145,8 +146,18 @@ def _usage_records(
     return {"status": "observed" if observed else "unavailable", "calls": calls}
 
 
+def _execution_usage_complete(execution: ExecutionResult | None) -> bool:
+    """Check that each known execution turn has one provider usage record."""
+    if execution is None or not execution.usage:
+        return False
+    return execution.turns is None or len(execution.usage) >= execution.turns
+
+
 def _world_usage(
-    events: tuple[WorldEvent, ...], requested_model: str
+    events: tuple[WorldEvent, ...],
+    requested_model: str,
+    inference_made: bool | None = None,
+    missing_usage_calls: int | None = None,
 ) -> dict[str, object]:
     """Collect usage from simulated World calls without counting them as turns."""
     calls = []
@@ -168,6 +179,19 @@ def _world_usage(
     return {
         "status": "observed" if calls else "unavailable",
         "calls": calls,
+        "inference_made": (
+            any(event.source == "world_model" for event in events)
+            if inference_made is None
+            else inference_made
+            or any(event.source == "world_model" for event in events)
+        ),
+        "missing_usage_calls": max(
+            sum(
+                event.source == "world_model" and event.usage is None
+                for event in events
+            ),
+            0 if missing_usage_calls is None else missing_usage_calls,
+        ),
     }
 
 
@@ -328,6 +352,131 @@ def _estimate_cost(
     return result
 
 
+def _estimate_role_cost(
+    execution_usage: Mapping[str, object],
+    world_usage: Mapping[str, object],
+    judge_usage: Mapping[str, object],
+    pricing: Mapping[str, ModelPricing] | None,
+    currency: str,
+    *,
+    execution_attempted: bool,
+    judge_attempted: bool,
+) -> dict[str, object]:
+    """Estimate each model role independently, then sum only complete stages."""
+    stage_inputs = (
+        ("execution", execution_usage, execution_attempted, execution_attempted),
+        (
+            "world",
+            world_usage,
+            True,
+            bool(world_usage.get("inference_made", False)),
+        ),
+        ("semantic_judgment", judge_usage, judge_attempted, judge_attempted),
+    )
+    stages: dict[str, object] = {}
+    amount = 0.0
+    unavailable: str | None = None
+    active = False
+    for name, section, required, inference_made in stage_inputs:
+        if not required:
+            stages[name] = {"status": "not_run"}
+            continue
+        if not inference_made:
+            stages[name] = {
+                "status": "estimated",
+                "currency": currency,
+                "amount": 0.0,
+                "inference_made": False,
+            }
+            continue
+        active = True
+        raw_calls = section.get("calls", ())
+        calls = (
+            [call for call in raw_calls if isinstance(call, dict)]
+            if isinstance(raw_calls, (list, tuple))
+            else []
+        )
+        if not calls:
+            stage_cost: dict[str, object] = {
+                "status": "unavailable",
+                "reason": "no provider usage recorded",
+            }
+        else:
+            groups: dict[str, list[dict[str, object]]] = {}
+            for call in calls:
+                model = call.get("requested_model")
+                if not isinstance(model, str) or not model:
+                    groups = {}
+                    break
+                groups.setdefault(model, []).append(call)
+            if not groups:
+                stage_cost = {
+                    "status": "unavailable",
+                    "reason": "provider usage is incomplete",
+                }
+            else:
+                model_costs: dict[str, object] = {}
+                stage_amount = 0.0
+                for model, model_calls in groups.items():
+                    estimate = _estimate_cost(
+                        ({"calls": model_calls},),
+                        None if pricing is None else pricing.get(model),
+                        currency,
+                    )
+                    model_costs[model] = estimate
+                    if estimate.get("status") != "estimated":
+                        stage_cost = {
+                            "status": "unavailable",
+                            "reason": str(
+                                estimate.get("reason", "provider usage is incomplete")
+                            ),
+                            "models": model_costs,
+                        }
+                        break
+                    stage_amount += cast(float, estimate["amount"])
+                else:
+                    stage_cost = {
+                        "status": "estimated",
+                        "currency": currency,
+                        "amount": round(stage_amount, 8),
+                        "models": model_costs,
+                    }
+        stages[name] = stage_cost
+        if (
+            section.get("missing_usage_calls", 0)
+            or section.get("usage_complete") is False
+        ):
+            stages[name] = {
+                "status": "unavailable",
+                "reason": "provider usage is incomplete",
+                "observed_usage_cost": stage_cost,
+            }
+            stage_cost = cast(dict[str, object], stages[name])
+        if stage_cost.get("status") != "estimated":
+            if unavailable is None:
+                unavailable = cast(str, stage_cost.get("reason", "cost unavailable"))
+        else:
+            amount += cast(float, stage_cost["amount"])
+    if unavailable is not None:
+        return {
+            "status": "unavailable",
+            "reason": unavailable,
+            "stages": stages,
+        }
+    if not active:
+        return {
+            "status": "unavailable",
+            "reason": "no provider usage recorded",
+            "stages": stages,
+        }
+    return {
+        "status": "estimated",
+        "currency": currency,
+        "amount": round(amount, 8),
+        "stages": stages,
+    }
+
+
 def _result_summary(
     case: EvalCase,
     outcome: str,
@@ -346,6 +495,14 @@ def _result_summary(
     profile_purpose: str | None = None,
     skill_available: bool = True,
     redactor: SecretRedactor | None = None,
+    executor_model: str | None = None,
+    executor_model_profile: str | None = None,
+    pricing_by_model: Mapping[str, ModelPricing] | None = None,
+    execution_attempted: bool | None = None,
+    judge_attempted: bool | None = None,
+    timings: Mapping[str, float | None] | None = None,
+    world_inference_made: bool | None = None,
+    world_missing_usage_calls: int = 0,
 ) -> dict[str, object]:
     overall_explanation, next_action = _overall_text(
         outcome, judged, assertions, checks, failure
@@ -380,9 +537,18 @@ def _result_summary(
     execution_usage = _usage_records(
         None if execution is None else execution.usage,
         stage="execution",
-        requested_model=requested_model,
+        requested_model=executor_model or requested_model,
     )
-    world_usage = _world_usage(events, requested_model)
+    execution_usage["usage_complete"] = not (
+        failure is not None
+        and (failure_stage or _failure_stage(failure)) == "execution"
+    ) and _execution_usage_complete(execution)
+    world_usage = _world_usage(
+        events,
+        requested_model,
+        world_inference_made,
+        world_missing_usage_calls,
+    )
     judge_usage: dict[str, object] = (
         {"status": "unavailable", "calls": []}
         if judged is None
@@ -394,6 +560,23 @@ def _result_summary(
         )
     )
     execution_status = "completed" if execution_present else "not_completed"
+    selected_pricing = pricing_by_model
+    if selected_pricing is None and pricing is not None:
+        selected_pricing = {requested_model: pricing}
+    actual_timings: dict[str, float | None] = {
+        "execution_seconds": None,
+        "world_seconds": None,
+        "judge_seconds": None,
+        "executor_seconds": None,
+    }
+    if timings is not None:
+        actual_timings.update(timings)
+    if execution_attempted is None:
+        execution_attempted = execution is not None
+    if judge_attempted is None:
+        judge_attempted = judged is not None or (
+            failure is not None and _failure_stage(failure) == "semantic_judgment"
+        )
     return {
         "skill": case.skill.identity.as_posix(),
         "case": case.identity.as_posix(),
@@ -402,12 +585,19 @@ def _result_summary(
             "explanation": overall_explanation,
             "next_action": next_action,
         },
+        "models": {
+            "executor": executor_model or requested_model,
+            "world": requested_model,
+            "judge": requested_model,
+        },
         "execution": {
             "status": execution_status,
             "final_response_produced": execution_present,
-            "requested_model": requested_model,
+            "requested_model": executor_model or requested_model,
+            "world_and_judge_model": requested_model,
             "model_profile": profile_name,
             "model_profile_purpose": profile_purpose,
+            "executor_model_profile": executor_model_profile,
             "skill_instructions_available": skill_available,
             "model_turns_used": None if execution is None else execution.turns,
             "model_turns_source": (
@@ -441,11 +631,16 @@ def _result_summary(
             "message": technical_message,
             "details": technical_details,
         },
-        "cost": _estimate_cost(
-            (execution_usage, world_usage, judge_usage),
-            pricing,
+        "cost": _estimate_role_cost(
+            execution_usage,
+            world_usage,
+            judge_usage,
+            selected_pricing,
             pricing_currency,
+            execution_attempted=execution_attempted,
+            judge_attempted=judge_attempted,
         ),
+        "timings": actual_timings,
     }
 
 
@@ -567,6 +762,68 @@ async def _resolve_profile(
     return profile, transport
 
 
+def _executor_model_failure(
+    config: SkillRollConfig, override: str | None
+) -> InferenceFailure | None:
+    """Reject an invalid executor override before any compatibility request."""
+    value = override
+    if value is None and config.inference is not None:
+        value = config.inference.executor_model
+    if value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or "\n" in value
+        or "\r" in value
+        or len(value.encode("utf-8")) > 200
+    ):
+        return InferenceFailure(
+            InferenceFailureKind.INVALID_CONFIGURATION,
+            "The executor model must contain 1 to 200 characters on one line.",
+            (
+                "Use a valid model identifier in [inference].executor_model or "
+                "--executor-model.",
+            ),
+        )
+    return None
+
+
+async def _resolve_executor_profile(
+    config: SkillRollConfig,
+    evaluator_profile: ResolvedInference,
+    *,
+    override: str | None,
+    transport_factory: TransportFactory,
+    preflighted: ResolvedInference | None = None,
+) -> ResolvedInference | InferenceFailure:
+    """Resolve and, if distinct, preflight the skill executor model once."""
+    if preflighted is not None:
+        return preflighted
+    configured = None if config.inference is None else config.inference.executor_model
+    requested = override if override is not None else configured
+    requested_model = (
+        evaluator_profile.model if requested is None else requested.strip()
+    )
+    if requested_model == evaluator_profile.model:
+        return evaluator_profile
+    executor_profile = replace(
+        evaluator_profile,
+        model=requested_model,
+        profile_name=None,
+        profile_purpose=None,
+    )
+    executor_transport = transport_factory(executor_profile)
+    try:
+        preflight = await run_preflight(executor_profile, executor_transport)
+    finally:
+        await executor_transport.close()
+    if not preflight.passed:
+        assert preflight.failure is not None
+        return replace(preflight.failure, stage="preflight")
+    return executor_profile
+
+
 def _concurrency_failure(
     concurrency: int, run_commands: bool
 ) -> InferenceFailure | None:
@@ -596,12 +853,17 @@ async def evaluate_repository(
     check_runner: CheckRunner | None = None,
     store_factory: StoreFactory = _store,
     model_profile: str | None = None,
+    executor_model: str | None = None,
     skill_available: bool = True,
     _resolved: tuple[ResolvedInference, ChatTransport] | None = None,
+    _executor_profile: ResolvedInference | None = None,
     _close_transport: bool = True,
 ) -> tuple[CaseResult, ...] | InferenceFailure:
     """Evaluate every selected case once, in stable order, after one preflight."""
     failure = _concurrency_failure(concurrency, run_commands)
+    if failure is not None:
+        return failure
+    failure = _executor_model_failure(config, executor_model)
     if failure is not None:
         return failure
     resolved = _resolved or await _resolve_profile(
@@ -611,12 +873,22 @@ async def evaluate_repository(
         return resolved
     profile, transport = resolved
     try:
+        executor_resolution = await _resolve_executor_profile(
+            config,
+            profile,
+            override=executor_model,
+            transport_factory=transport_factory,
+            preflighted=_executor_profile,
+        )
+        if isinstance(executor_resolution, InferenceFailure):
+            return executor_resolution
+        executor_profile = executor_resolution
         redactor = SecretRedactor(profile.api_key)
         store = store_factory(config.repository_root, redactor)
         runner = HostCheckRunner() if check_runner is None else check_runner
 
         async def evaluate_case(case: EvalCase) -> CaseResult:
-            executor = executor_factory(profile)
+            executor = executor_factory(executor_profile)
             preliminary = await execute_preliminary(
                 config,
                 case,
@@ -625,11 +897,21 @@ async def evaluate_repository(
                 transport,
                 store,
                 skill_available=skill_available,
+                executor_model=executor_profile.model,
             )
             events = preliminary.events
             checks: tuple[CheckResult, ...] = ()
             assertions: tuple[AssertionResult, ...] = ()
             judged: JudgeResult | None = None
+            judge_attempted = False
+            timings: dict[str, float | None] = {
+                "execution_seconds": None,
+                "world_seconds": None,
+                "judge_seconds": None,
+                "executor_seconds": None,
+            }
+            if preliminary.timings is not None:
+                timings.update(preliminary.timings)
             failure = preliminary.failure
             failure_stage = "execution" if failure is not None else None
             execution = (
@@ -647,14 +929,19 @@ async def evaluate_repository(
                 assertions = evaluate_assertions(
                     case.assertions, execution.final_output
                 )
-                judged, failure = await judge(
-                    replace(profile, limits=limits),
-                    transport,
-                    case,
-                    execution,
-                    events,
-                    skill_available=skill_available,
-                )
+                judge_attempted = True
+                judge_started = perf_counter()
+                try:
+                    judged, failure = await judge(
+                        replace(profile, limits=limits),
+                        transport,
+                        case,
+                        execution,
+                        events,
+                        skill_available=skill_available,
+                    )
+                finally:
+                    timings["judge_seconds"] = perf_counter() - judge_started
                 if failure is not None:
                     failure_stage = "semantic_judgment"
                 try:
@@ -670,11 +957,18 @@ async def evaluate_repository(
                                         "execution": _usage_records(
                                             execution.usage,
                                             stage="execution",
-                                            requested_model=profile.model,
+                                            requested_model=executor_profile.model,
                                         ),
-                                        "world": _world_usage(events, profile.model),
+                                        "world": _world_usage(
+                                            events,
+                                            profile.model,
+                                            preliminary.world_inference_made,
+                                            preliminary.world_missing_usage,
+                                        ),
                                     },
                                     turns_source=execution.turns_source,
+                                    executor_model=executor_profile.model,
+                                    world_judge_model=profile.model,
                                 ),
                             ),
                             (
@@ -724,6 +1018,9 @@ async def evaluate_repository(
                 preliminary.artifact_directory,
                 events,
                 skill_available,
+                timings,
+                preliminary.world_inference_made,
+                preliminary.world_missing_usage,
             )
             if directory is not None:
                 try:
@@ -761,6 +1058,9 @@ async def evaluate_repository(
                             if config.pricing is None
                             else config.pricing.models.get(profile.model)
                         ),
+                        pricing_by_model=(
+                            None if config.pricing is None else config.pricing.models
+                        ),
                         pricing_currency=(
                             "USD" if config.pricing is None else config.pricing.currency
                         ),
@@ -768,6 +1068,13 @@ async def evaluate_repository(
                         profile_purpose=profile.profile_purpose,
                         skill_available=skill_available,
                         redactor=redactor,
+                        executor_model=executor_profile.model,
+                        executor_model_profile=executor_profile.profile_name,
+                        execution_attempted=preliminary.execution_attempted,
+                        judge_attempted=judge_attempted,
+                        timings=timings,
+                        world_inference_made=preliminary.world_inference_made,
+                        world_missing_usage_calls=preliminary.world_missing_usage,
                     )
                     store.append(
                         directory,
@@ -813,6 +1120,7 @@ async def evaluate_repository(
                                     model_profile=profile.profile_name,
                                     model_profile_purpose=profile.profile_purpose,
                                     skill_available=skill_available,
+                                    executor_model=executor_profile.model,
                                 ),
                             ),
                         )
@@ -834,6 +1142,9 @@ async def evaluate_repository(
                         preliminary.artifact_directory,
                         events,
                         skill_available,
+                        timings,
+                        preliminary.world_inference_made,
+                        preliminary.world_missing_usage,
                     )
             return result
 
@@ -910,7 +1221,9 @@ def _control_interpretation(skill: CaseResult, control: CaseResult | None) -> st
 
 
 def _experiment_usage(
-    results: tuple[CaseResult, ...], requested_model: str
+    results: tuple[CaseResult, ...],
+    requested_model: str,
+    executor_model: str | None = None,
 ) -> dict[str, object]:
     calls: list[dict[str, object]] = []
     for item in results:
@@ -918,9 +1231,19 @@ def _experiment_usage(
             _usage_records(
                 None if item.execution is None else item.execution.usage,
                 stage="execution",
-                requested_model=requested_model,
+                requested_model=executor_model or requested_model,
             ),
-            _world_usage(item.events, requested_model),
+            _world_usage(
+                item.events,
+                requested_model,
+                item.world_inference_made
+                or any(event.source == "world_model" for event in item.events),
+                item.world_missing_usage
+                or sum(
+                    event.source == "world_model" and event.usage is None
+                    for event in item.events
+                ),
+            ),
             _usage_records(
                 None if item.judge is None else item.judge.usage,
                 stage="semantic_judgment",
@@ -933,6 +1256,94 @@ def _experiment_usage(
             if isinstance(values, (list, tuple)):
                 calls.extend(call for call in values if isinstance(call, dict))
     return {"status": "observed" if calls else "unavailable", "calls": calls}
+
+
+def _experiment_cost(
+    results: tuple[CaseResult, ...],
+    evaluator_model: str,
+    executor_model: str,
+    pricing: Mapping[str, ModelPricing] | None,
+    currency: str,
+) -> dict[str, object]:
+    """Calculate mixed-role experiment cost from the same per-stage rules."""
+    usage = _experiment_usage(results, evaluator_model, executor_model)
+    calls = usage.get("calls", ())
+    all_calls = (
+        [item for item in calls if isinstance(item, dict)]
+        if isinstance(calls, (list, tuple))
+        else []
+    )
+    execution_calls = [item for item in all_calls if item.get("stage") == "execution"]
+    world_calls = [item for item in all_calls if item.get("stage") == "world"]
+    judge_calls = [
+        item for item in all_calls if item.get("stage") == "semantic_judgment"
+    ]
+    execution_attempted = any(
+        item.execution is not None or item.timings.get("execution_seconds") is not None
+        for item in results
+    )
+    world_inference_made = any(
+        item.world_inference_made
+        or any(event.source == "world_model" for event in item.events)
+        for item in results
+    )
+    world_missing_usage = sum(
+        item.world_missing_usage
+        or sum(
+            event.source == "world_model" and event.usage is None
+            for event in item.events
+        )
+        for item in results
+    )
+    judge_attempted = any(
+        item.judge is not None
+        or (
+            item.failure is not None
+            and _failure_stage(item.failure) == "semantic_judgment"
+        )
+        for item in results
+    )
+    execution_usage_complete = not any(
+        (
+            item.execution is not None
+            or item.timings.get("execution_seconds") is not None
+            or (
+                item.failure is not None and _failure_stage(item.failure) == "execution"
+            )
+        )
+        and not _execution_usage_complete(item.execution)
+        for item in results
+    )
+    judge_usage_complete = not any(
+        (
+            item.judge is not None
+            or (
+                item.failure is not None
+                and _failure_stage(item.failure) == "semantic_judgment"
+            )
+        )
+        and (item.judge is None or item.judge.usage is None)
+        for item in results
+    )
+    return _estimate_role_cost(
+        {
+            "calls": execution_calls,
+            "usage_complete": execution_usage_complete,
+        },
+        {
+            "calls": world_calls,
+            "inference_made": world_inference_made,
+            "missing_usage_calls": world_missing_usage,
+        },
+        {
+            "calls": judge_calls,
+            "usage_complete": judge_usage_complete,
+        },
+        pricing,
+        currency,
+        execution_attempted=execution_attempted,
+        judge_attempted=judge_attempted,
+    )
 
 
 def _experiment_interpretation(
@@ -1032,9 +1443,13 @@ async def evaluate_experiment(
     check_runner: CheckRunner | None = None,
     store_factory: StoreFactory = _store,
     model_profile: str | None = None,
+    executor_model: str | None = None,
 ) -> ExperimentResult | InferenceFailure:
     """Collect independent samples and optional paired skill-omission controls."""
     failure = _concurrency_failure(concurrency, run_commands)
+    if failure is not None:
+        return failure
+    failure = _executor_model_failure(config, executor_model)
     if failure is not None:
         return failure
     resolved = await _resolve_profile(
@@ -1043,10 +1458,19 @@ async def evaluate_experiment(
     if isinstance(resolved, InferenceFailure):
         return resolved
     profile, transport = resolved
-    redactor = SecretRedactor(profile.api_key)
-    parent_store = store_factory(config.repository_root, redactor)
     pairs: list[ExperimentPair] = []
     try:
+        executor_resolution = await _resolve_executor_profile(
+            config,
+            profile,
+            override=executor_model,
+            transport_factory=transport_factory,
+        )
+        if isinstance(executor_resolution, InferenceFailure):
+            return executor_resolution
+        executor_profile = executor_resolution
+        redactor = SecretRedactor(profile.api_key)
+        parent_store = store_factory(config.repository_root, redactor)
         for sample in range(1, samples + 1):
             selected = await evaluate_repository(
                 config,
@@ -1059,8 +1483,10 @@ async def evaluate_experiment(
                 check_runner=check_runner,
                 store_factory=store_factory,
                 model_profile=model_profile,
+                executor_model=executor_model,
                 skill_available=True,
                 _resolved=(profile, transport),
+                _executor_profile=executor_profile,
                 _close_transport=False,
             )
             if isinstance(selected, InferenceFailure):
@@ -1078,8 +1504,10 @@ async def evaluate_experiment(
                     check_runner=check_runner,
                     store_factory=store_factory,
                     model_profile=model_profile,
+                    executor_model=executor_model,
                     skill_available=False,
                     _resolved=(profile, transport),
+                    _executor_profile=executor_profile,
                     _close_transport=False,
                 )
                 if isinstance(control_values, InferenceFailure):
@@ -1108,6 +1536,12 @@ async def evaluate_experiment(
         "case": (cases[0].identity.as_posix() if len(cases) == 1 else "selected cases"),
         "cases": [case.identity.as_posix() for case in cases],
         "model": profile.model,
+        "models": {
+            "executor": executor_profile.model,
+            "world": profile.model,
+            "judge": profile.model,
+        },
+        "executor_model": executor_profile.model,
         "model_profile": profile.profile_name,
         "model_profile_purpose": profile.profile_purpose,
         "samples_requested": samples,
@@ -1145,22 +1579,26 @@ async def evaluate_experiment(
             for pair in frozen_pairs
         ],
         "usage": {
-            "skill_runs": _experiment_usage(skill_runs, profile.model),
-            "skill_control_runs": _experiment_usage(control_runs, profile.model),
+            "skill_runs": _experiment_usage(
+                skill_runs, profile.model, executor_profile.model
+            ),
+            "skill_control_runs": _experiment_usage(
+                control_runs, profile.model, executor_profile.model
+            ),
         },
         "cost": {
-            "skill_runs": _estimate_cost(
-                (_experiment_usage(skill_runs, profile.model),),
-                None
-                if config.pricing is None
-                else config.pricing.models.get(profile.model),
+            "skill_runs": _experiment_cost(
+                skill_runs,
+                profile.model,
+                executor_profile.model,
+                None if config.pricing is None else config.pricing.models,
                 "USD" if config.pricing is None else config.pricing.currency,
             ),
-            "skill_control_runs": _estimate_cost(
-                (_experiment_usage(control_runs, profile.model),),
-                None
-                if config.pricing is None
-                else config.pricing.models.get(profile.model),
+            "skill_control_runs": _experiment_cost(
+                control_runs,
+                profile.model,
+                executor_profile.model,
+                None if config.pricing is None else config.pricing.models,
                 "USD" if config.pricing is None else config.pricing.currency,
             ),
         },
@@ -1203,6 +1641,7 @@ def run(
     store_factory: StoreFactory = _store,
     selected_cases: tuple[EvalCase, ...] | None = None,
     model_profile: str | None = None,
+    executor_model: str | None = None,
     samples: int = 1,
     with_skill_control: bool = False,
 ) -> CommandResult:
@@ -1262,6 +1701,7 @@ def run(
                 check_runner=check_runner,
                 store_factory=store_factory,
                 model_profile=model_profile,
+                executor_model=executor_model,
             )
             if research_mode
             else evaluate_repository(
@@ -1275,6 +1715,7 @@ def run(
                 check_runner=check_runner,
                 store_factory=store_factory,
                 model_profile=model_profile,
+                executor_model=executor_model,
             )
         )
     except KeyboardInterrupt:

@@ -341,6 +341,7 @@ today; expect the interface to change between minor releases.
 - [Author and audit good skills and evals](docs/authoring.md)
 - [Write an eval](docs/writing-evals.md)
 - [Configure models and cost](docs/configuration.md)
+- [Compare skill executor models](docs/comparing-models.md)
 - [Understand results and fix problems](docs/results.md)
 - [Add advisory GitHub checks](docs/github-actions.md)
 - [Review the security model](docs/security.md)

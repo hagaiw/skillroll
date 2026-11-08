@@ -34,6 +34,21 @@ Sampled runs and no-skill comparisons live under
 second verdict. When the GitHub Action uploads evidence, it includes both that
 parent directory and the per-run evidence under `.skillroll/runs/`.
 
+Independent executor-model comparisons are saved under
+`.skillroll/comparisons/comparison-<id>/`:
+
+- `manifest.json` records the pre-inference configuration and fingerprints;
+- `comparison.json` contains preflight evidence, a checkpoint with attempt
+  statuses, and the machine-readable summary; and
+- `report.md` explains the comparison for a person to read.
+
+Pending attempts remain `NOT_RUN`; completed attempts reference their normal
+run evidence under `.skillroll/runs/`. A comparison report is descriptive
+evidence across the selected cases and samples; it does not establish
+equivalence or prove quality parity. See
+[Compare executor models](comparing-models.md) for the workflow and
+interpretation limits.
+
 ## Fix a failed case
 
 Start with the report, then inspect the transcript:

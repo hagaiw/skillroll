@@ -217,7 +217,12 @@ def _parser() -> SkillRollParser:
     evaluate_parser.add_argument(
         "--model-profile",
         metavar="NAME",
-        help="Model profile to use.",
+        help="Evaluator model profile to use for the World and judge.",
+    )
+    evaluate_parser.add_argument(
+        "--executor-model",
+        metavar="MODEL",
+        help="Run the skill on MODEL while keeping the configured evaluator fixed.",
     )
     evaluate_parser.add_argument(
         "--concurrency",
@@ -237,6 +242,53 @@ def _parser() -> SkillRollParser:
         "--with-skill-control",
         action="store_true",
         help="Also run without the skill to check whether the eval depends on it.",
+    )
+    compare_parser = commands.add_parser(
+        "compare", help="Compare executor models with a fixed evaluator."
+    )
+    compare_parser.add_argument(
+        "--repo", metavar="PATH", help="Repository directory override."
+    )
+    compare_selection = compare_parser.add_mutually_exclusive_group()
+    compare_selection.add_argument(
+        "--skill", metavar="PATH", help="Skill path relative to skills_path."
+    )
+    compare_selection.add_argument(
+        "--case", metavar="PATH", help="Eval-case path relative to skills_path."
+    )
+    compare_selection.add_argument(
+        "--all", action="store_true", help="Compare all cases in the repository."
+    )
+    compare_parser.add_argument(
+        "--executor-model",
+        action="append",
+        dest="executor_models",
+        metavar="MODEL",
+        help="Candidate model; repeat for 2-8 distinct models, baseline first.",
+    )
+    compare_parser.add_argument(
+        "--model-profile", metavar="NAME", help="Fixed evaluator model profile."
+    )
+    compare_parser.add_argument(
+        "--samples",
+        type=int,
+        default=5,
+        metavar="N",
+        help="Attempts per case/model (1-10; default: 5).",
+    )
+    compare_parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Run-order seed (0-4294967295; default: 0); does not seed model responses."
+        ),
+    )
+    compare_parser.add_argument(
+        "--run-commands",
+        action="store_true",
+        help="Run trusted repository checks declared by cases; comparison is serial.",
     )
     return parser
 
@@ -277,7 +329,7 @@ def _missing_command() -> CommandResult:
                 "Choose one SkillRoll command to continue.",
                 next_action=(
                     "Run 'skillroll --help' and choose init, new, doctor, validate, "
-                    "or eval."
+                    "eval, or compare."
                 ),
             ),
         ),
@@ -380,9 +432,24 @@ def main(
                         all_cases=namespace.all,
                         run_commands=namespace.run_commands,
                         model_profile=namespace.model_profile,
+                        executor_model=namespace.executor_model,
                         samples=namespace.samples,
                         concurrency=namespace.concurrency,
                         with_skill_control=namespace.with_skill_control,
+                    )
+                elif namespace.command == "compare" and commands is None:
+                    from skillroll.commands import compare
+
+                    result = compare.run(
+                        repo=namespace.repo,
+                        skill=namespace.skill,
+                        case=namespace.case,
+                        all_cases=namespace.all,
+                        executor_models=tuple(namespace.executor_models or ()),
+                        model_profile=namespace.model_profile,
+                        samples=namespace.samples,
+                        seed=namespace.seed,
+                        run_commands=namespace.run_commands,
                     )
                 else:
                     result = (COMMANDS if commands is None else commands)[

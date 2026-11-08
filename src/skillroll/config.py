@@ -40,6 +40,7 @@ _INFERENCE_KEYS = frozenset(
         "extra_body",
         "wire",
         "supports_temperature",
+        "executor_model",
     }
 )
 _LIMIT_KEYS = frozenset({"max_turns", "timeout_seconds", "max_output_tokens"})
@@ -392,6 +393,7 @@ def load_config(repository_root: Path) -> ParsedResult[SkillRollConfig]:
             )
         base_url = inference_value.get("base_url")
         model = inference_value.get("model")
+        executor_model = inference_value.get("executor_model")
         api_key_env = inference_value.get("api_key_env")
         limits = _inference_limits(inference_value.get("limits"))
         profiles = _model_profiles(inference_value.get("profiles"))
@@ -406,9 +408,17 @@ def load_config(repository_root: Path) -> ParsedResult[SkillRollConfig]:
             and "\r" not in model
             and len(model.encode("utf-8")) <= 200
         )
+        valid_executor_model = executor_model is None or (
+            isinstance(executor_model, str)
+            and bool(executor_model.strip())
+            and "\n" not in executor_model
+            and "\r" not in executor_model
+            and len(executor_model.encode("utf-8")) <= 200
+        )
         if (
             not isinstance(base_url, str)
             or not valid_model
+            or not valid_executor_model
             or not isinstance(api_key_env, str)
             or not base_url
             or not api_key_env
@@ -451,6 +461,7 @@ def load_config(repository_root: Path) -> ParsedResult[SkillRollConfig]:
             extra_body,
             wire,
             supports_temperature,
+            None if executor_model is None else executor_model.strip(),
         )
     pricing = _pricing(data.get("pricing"))
     if data.get("pricing") is not None and pricing is None:

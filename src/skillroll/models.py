@@ -47,6 +47,7 @@ class InferenceSettings:
     extra_body: Mapping[str, JSONValue] = field(default_factory=dict)
     wire: InferenceWire = InferenceWire.CHAT_COMPLETIONS
     supports_temperature: bool = True
+    executor_model: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

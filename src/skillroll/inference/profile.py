@@ -124,7 +124,7 @@ def bounded_failure_details(
 
 @dataclass(frozen=True, slots=True)
 class ResolvedInference:
-    """The one profile shared by execution, world simulation, and judging."""
+    """One resolved model sharing the repository's compatible endpoint settings."""
 
     base_url: str
     model: str

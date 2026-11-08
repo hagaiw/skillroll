@@ -7,6 +7,11 @@ Notable user-visible changes are recorded here. The format follows
 
 ### Added
 
+- `inference.executor_model` and `skillroll eval --executor-model MODEL` run the
+  skill separately from the evaluator used for the Dungeon Master and judge.
+- `skillroll compare` runs 2–8 unique skill executor models serially against a
+  fixed evaluator and saves comparison evidence under
+  `.skillroll/comparisons/comparison-<id>/`.
 - `[inference.extra_body]` TOML table: key/value pairs forwarded to the
   OpenAI-compatible SDK's `extra_body=` kwarg on every completion call.
   Useful for reasoning models that require gateway-specific parameters (e.g.
