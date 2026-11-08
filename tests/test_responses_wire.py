@@ -220,6 +220,8 @@ def test_responses_request_uses_input_and_max_output_tokens() -> None:
     assert calls[0]["max_output_tokens"] == 512
     assert "messages" not in calls[0]
     assert "max_tokens" not in calls[0]
+    assert "tool_choice" not in calls[0]
+    assert "tools" not in calls[0]
 
 
 def test_responses_request_renders_tools_flat() -> None:

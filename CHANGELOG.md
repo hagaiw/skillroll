@@ -29,6 +29,9 @@ Notable user-visible changes are recorded here. The format follows
 
 ### Fixed
 
+- Responses requests omit unset tool choices and empty tool lists, avoiding
+  gateways that reject explicit null values.
+
 - `world_action` now recovers string-encoded `arguments` and leaked
   `<parameter>` tool-call markup instead of failing with a generic SDK error,
   returns a specific error for input it cannot recover, and records both cases

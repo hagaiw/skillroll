@@ -485,16 +485,16 @@ class OpenAIResponsesTransport:
             request_values: dict[str, object] = {
                 "model": cast(Any, request.model),
                 "input": cast(Any, _responses_input(request.messages)),
-                "tools": cast(Any, _responses_tools(request.tools) or None),
-                "tool_choice": cast(
-                    Any,
-                    {"type": "function", "name": request.force_tool}
-                    if request.force_tool is not None
-                    else None,
-                ),
                 "max_output_tokens": request.max_output_tokens,
                 "stream": False,
             }
+            if request.tools:
+                request_values["tools"] = _responses_tools(request.tools)
+            if request.force_tool is not None:
+                request_values["tool_choice"] = {
+                    "type": "function",
+                    "name": request.force_tool,
+                }
             if request.temperature is not None and self._profile.supports_temperature:
                 request_values["temperature"] = request.temperature
             if request.response_format is not None:
