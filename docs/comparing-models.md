@@ -1,5 +1,12 @@
 # Compare executor models
 
+The `compare` command and executor model options in this guide are in the
+upcoming release and are not in the released `v0.2.0` CLI. To try them before
+release, use a SkillRoll source checkout containing this change: run
+`uv sync --locked`, then run the command with `uv run skillroll` and `--repo
+PATH` for the repository you want to evaluate. After release, use the
+installed `skillroll` command from that repository.
+
 `skillroll compare` runs the same selected cases with several candidate models
 as the skill executor. The configured `model`, or the model chosen by
 `--model-profile`, remains fixed for the Dungeon Master and judge. The
@@ -15,7 +22,8 @@ Use one or more cases that represent the behavior you care about. This example
 runs five samples on one eval:
 
 ```shell
-skillroll compare \
+uv run skillroll compare \
+  --repo /path/to/your-repository \
   --executor-model provider/baseline \
   --executor-model provider/candidate \
   --samples 5 \
@@ -38,6 +46,44 @@ fixed; SkillRoll does not switch models partway through an attempt.
 `--seed` controls run order only; it does not seed model responses. The World
 is generative, so repeated attempts can differ even with the same case, seed,
 model names, and configuration.
+
+## A current OpenRouter candidate
+
+For a low-cost executor candidate, test `openai/gpt-6-luna` against your existing
+model. The following shared settings were exercised through OpenRouter on
+November 8, 2026 with GPT-6 Luna and both base and Pro GPT-5.6 Luna executors:
+
+```toml
+[inference]
+base_url = "https://openrouter.ai/api/v1"
+model = "openai/gpt-5.6-luna-pro"
+api_key_env = "SKILLROLL_API_KEY"
+wire = "chat_completions"
+supports_temperature = false
+
+[inference.extra_body]
+reasoning_effort = "none"
+```
+
+From the source checkout, compare the candidates on your own cases:
+
+```shell
+uv run skillroll compare \
+  --repo /path/to/your-repository \
+  --executor-model openai/gpt-5.6-luna-pro \
+  --executor-model openai/gpt-5.6-luna \
+  --executor-model openai/gpt-6-luna \
+  --samples 5 --all
+```
+
+The evaluator stays at the existing baseline. This recipe verifies a supported
+request setup; it does not establish the best executor or validate the
+baseline's judging accuracy. Base and Pro routes can use different amounts of
+reasoning even when their listed token rates match. Check current
+[model guidance](https://developers.openai.com/api/docs/models/gpt-6-luna) and
+[gateway pricing](https://openrouter.ai/openai/gpt-6-luna), then use returned
+usage and your own cases to assess cost and behavior. Gateway settings and
+routes can change.
 
 ## Read the evidence
 

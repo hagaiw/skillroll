@@ -25,6 +25,12 @@ export SKILLROLL_API_KEY="your-key"
 
 ### Separate the skill model
 
+The `executor_model` setting and `--executor-model` option below are in the
+upcoming release; the released `v0.2.0` CLI and configuration parser do not
+recognize them. To try them before release, use a SkillRoll source checkout
+containing this change, run `uv sync --locked`, then invoke SkillRoll with
+`uv run skillroll eval --repo PATH` from that checkout.
+
 The configured `model` (or the model selected by `--model-profile`) is the
 evaluator model: it runs the Dungeon Master and judge. To run the skill with a
 different model, set `executor_model`:
@@ -59,8 +65,10 @@ them to compare results over time because their model and capacity can change.
 ## OpenRouter
 
 OpenRouter is optional. It offers many models through one compatible endpoint.
-For ongoing evals, our current price/performance recommendation is
-[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro):
+The repository's existing evaluator baseline is
+[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro).
+Keep the evaluator fixed while testing cheaper models running the skill; the
+baseline is not a claim of optimal price or judge accuracy:
 
 ```toml
 [inference]
