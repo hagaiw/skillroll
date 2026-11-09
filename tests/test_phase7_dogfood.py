@@ -122,11 +122,21 @@ def test_blind_evaluation_collection_keeps_phase_and_evidence_boundaries() -> No
             cases
         )
 
-    selection = (root / "select-blind-targets/SKILL.md").read_text().lower()
-    preparation = (root / "prepare-blind-trial/SKILL.md").read_text().lower()
-    authoring = (root / "author-blind-evals/SKILL.md").read_text().lower()
-    running = (root / "run-blind-evals/SKILL.md").read_text().lower()
-    campaign = (root / "blind-skillroll-evaluation/SKILL.md").read_text().lower()
+    selection = (
+        (root / "select-blind-targets/SKILL.md").read_text(encoding="utf-8").lower()
+    )
+    preparation = (
+        (root / "prepare-blind-trial/SKILL.md").read_text(encoding="utf-8").lower()
+    )
+    authoring = (
+        (root / "author-blind-evals/SKILL.md").read_text(encoding="utf-8").lower()
+    )
+    running = (root / "run-blind-evals/SKILL.md").read_text(encoding="utf-8").lower()
+    campaign = (
+        (root / "blind-skillroll-evaluation/SKILL.md")
+        .read_text(encoding="utf-8")
+        .lower()
+    )
 
     assert "before any run outcomes" in selection
     assert "current local skillroll main" in preparation
