@@ -8,9 +8,10 @@ description: Use when supplied change facts need a summary, risk assessment, and
 Use the installed `flow-runner` to coordinate `summarize-change`,
 `assess-risk`, and `produce-review`. Request exactly this action:
 `tool_name: "Skill"`, with arguments `{"name":"flow-runner"}`. The tool name is
-always `Skill`, never `flow-runner` or a component skill. Give the runner the
-supplied change facts, then return a review that labels evidence and
-uncertainty. If the runner or a step is unavailable or returns an error or
+always `Skill`, never `flow-runner` or a component skill. The runner receives
+the supplied change facts from the conversation. Use only the `name` argument
+in the generic action. Return a review that labels evidence and uncertainty.
+If the runner or a step is unavailable or returns an error or
 malformed artifact, explain the failed dependency and stop without claiming a
 completed review.
 
