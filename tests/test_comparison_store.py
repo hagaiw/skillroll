@@ -30,7 +30,8 @@ def test_create_comparison_is_private_and_retries_collisions(tmp_path: Path) -> 
     comparison_id, directory = second.create_comparison()
     assert comparison_id == "comparison-next"
     assert directory.is_dir()
-    assert directory.stat().st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert directory.stat().st_mode & 0o077 == 0
 
     with pytest.raises(ArtifactError, match="unique"):
         first.create_comparison()
