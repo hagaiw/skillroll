@@ -24,11 +24,16 @@ For advice or review of supplied material, use that material and the packaged
 guidance. Inspect or modify a repository only when the requested task needs
 repository-specific evidence or file changes; a request for an explanation is
 not a request to execute the authoring workflow.
+When returning a proposed case without file changes or live runs, label it an
+offline draft and state what verification remains.
 
 For a broad repository request such as “add evals to this repository,” read and
 follow the bounded [repository pass](references/repository-pass.md) before
-selecting skills or writing cases. Do not create a weak case for every
-discovered skill.
+selecting skills or writing cases. Select at most three skills for the first
+batch. Defer skills whose primary behavior needs a capability the case cannot
+exercise, even if it is possible to write a generic refusal case. In the
+handoff, name the deferrals and state separately whether live inference was
+authorized and whether it ran.
 
 ## Write one useful case
 

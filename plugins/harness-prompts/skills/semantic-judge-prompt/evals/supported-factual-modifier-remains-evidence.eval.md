@@ -13,11 +13,12 @@ limits:
 Apply the bundled semantic-judge contract to this completed evaluation. The
 known context says that last week's production regression happened because a
 bug fix updated only two of three duplicated handlers, leaving one site
-unpatched. The criterion requires an
-evidence-based maintenance-risk conclusion. The observed final output says:
+unpatched. The criterion asks when the regression happened and how it
+supports the maintenance-risk conclusion. The observed final output says:
 “Last week's regression happened because one duplicated site was left
 unpatched, so duplication remains a maintenance risk.” Explain whether the
-criterion is supported and identify the evidence boundary.
+criterion is supported and identify the evidence boundary. How would the
+judgment change if the context omitted the date?
 
 ## World
 

@@ -42,7 +42,7 @@ rules:
     result: "ERROR: Write requires complete replacement content for FACTS.md."
 limits:
   max_turns: 12
-  timeout_seconds: 90
+  timeout_seconds: 180
   max_output_tokens: 1024
 assertions:
   - final_output_contains: "tenant"
@@ -50,8 +50,9 @@ assertions:
 
 ## Input
 
-Reconcile the cache-key fact in the existing book against the current source.
-Keep the history understandable and report which fact is safe to use now.
+Reconcile the cache-key fact in the existing book against the current release
+notes in `release-4.2.md`. Keep the history understandable and report which
+fact is safe to use now.
 
 ## World
 

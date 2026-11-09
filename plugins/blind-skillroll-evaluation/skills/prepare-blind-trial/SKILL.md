@@ -19,3 +19,10 @@ whether `doctor` and `eval` ran.
 
 Read [preparation context](references/context.md) for isolation, secrets, and
 the trial manifest.
+
+When advisory CI is requested, inspect the generated workflow after creation.
+For any secret-backed pull-request step or job, verify an explicit
+same-repository guard that excludes fork PRs; do not use `pull_request_target`
+to run fork-controlled code with secrets. Report the exact verified guard in
+the manifest. If the workflow cannot be inspected or lacks the guard, report
+that as a blocker and do not claim the secret boundary is safe.

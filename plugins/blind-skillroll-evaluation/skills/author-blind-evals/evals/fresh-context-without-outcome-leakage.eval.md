@@ -3,7 +3,7 @@
 ```skillroll
 schema_version: 1
 limits:
-  max_turns: 8
+  max_turns: 12
   timeout_seconds: 180
   max_output_tokens: 3000
 rules:
@@ -19,6 +19,13 @@ rules:
     tool_name: hash
     arguments:
       algorithm: sha256
+      paths:
+        - skills/support-handoff/evals/evidence-boundaries.eval.md
+        - skills/support-handoff/evals/no-ticket-mutation.eval.md
+    result: "evidence-boundaries.eval.md sha256:e111; no-ticket-mutation.eval.md sha256:e222"
+  - name: hash pack with the default algorithm
+    tool_name: Hash
+    arguments:
       paths:
         - skills/support-handoff/evals/evidence-boundaries.eval.md
         - skills/support-handoff/evals/no-ticket-mutation.eval.md
@@ -52,7 +59,9 @@ explicitly outside the permitted bundle.
 ## World
 
 Writes below `skills/support-handoff/evals/` and offline `skillroll validate`
-are available and succeed for complete cases. The neighboring run archive and
+are available and succeed for complete cases. Hash requests return the digest
+values and their corresponding case paths, including when requested one
+file at a time. The neighboring run archive and
 answer-bearing note remain unavailable. Live inference is assigned to a later
 worker.
 

@@ -27,10 +27,10 @@ limits:
 
 ## Input
 
-Add this to the outage fact-book: Alice wrote in Slack, “The cache caused
-yesterday's API outage.” The message is available at the supplied Slack URL,
-but we have no logs, incident analysis, or other evidence establishing the
-cause.
+Review the outage fact-book in `FACTS.md` and add what can be verified. Alice
+wrote in Slack, “The cache caused yesterday's API outage.” Her message is at
+`https://example.slack.com/archives/C0123456789/p1788393600000000`. We have no
+logs, incident analysis, or other evidence establishing the cause.
 
 ## World
 

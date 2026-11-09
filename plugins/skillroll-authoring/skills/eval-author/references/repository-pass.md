@@ -72,8 +72,9 @@ Assume the maintainer did not see the authoring conversation. State:
 1. what repository scope was inspected;
 2. which cases changed and what behavior each tests;
 3. the strongest evidence actually earned;
-4. important deferrals and why they need different evidence;
-5. commands and model-backed runs, including what was not run; and
+4. each deferred skill by name or path and why it needs different evidence;
+5. commands and model-backed runs, whether inference was authorized, and what
+   was not run; and
 6. the smallest next action.
 
 Use these labels carefully:
@@ -100,6 +101,8 @@ Deferred
 
 Verification
 - Inspected `<count>` skills; selected `<count>`; deferred `<count>`.
+- State separately whether live inference was authorized and whether it ran;
+  call offline-validated cases drafts, not behavioral evidence.
 - Ran `<commands and live evals>`. Did not run `<unrun work>`.
 
 Next
