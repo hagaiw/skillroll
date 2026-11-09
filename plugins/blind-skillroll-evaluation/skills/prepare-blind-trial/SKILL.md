@@ -16,6 +16,10 @@ candidate repository commands, overwrite existing workflows, commit, push,
 publish, or expose an inference key. Preparation evidence is not a live eval.
 The final manifest must name generated paths and commands and explicitly state
 whether `doctor` and `eval` ran.
+Record the completed install or build from the pinned local SHA and the
+completed initialization of the target skills root as separate steps. If a
+combined setup result only reports the pins or files, obtain completion
+evidence before reporting either step as done.
 
 Read [preparation context](references/context.md) for isolation, secrets, and
 the trial manifest.
