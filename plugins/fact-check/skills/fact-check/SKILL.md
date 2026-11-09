@@ -85,6 +85,9 @@ date, updated date, last-verified date, status, and one or more sources.
    superseded when appropriate.
 3. **Update:** Edit only the affected record, preserve its ID, update `Updated`,
    and change `Last verified` only when verification actually happened.
+   When correcting the value in place, cite only sources that support the
+   current statement in `Source`. Keep any superseded source and value in a
+   `Note` that labels them historical.
 4. **Report:** Cite record IDs and the checked source locators in the final
    reply, including for updates. Report only facts from the book as
    facts; keep gaps and theories in the conversation. When evidence is missing,
