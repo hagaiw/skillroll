@@ -1,8 +1,14 @@
 # SkillRoll examples
 
-These three small repositories are checked-in examples of different Agent
+These small repositories are checked-in examples of different Agent
 Skill boundaries. They use the current `skillroll.toml` and Markdown eval
-format and contain no inference endpoint or API key.
+format. Their active configuration requires no inference endpoint or API key
+for validation.
+
+The [release-gate comparison](release-gate-comparison/) follows a queued-CI
+failure through a prompt repair and compares two models running the revised
+skill. It includes recorded live action traces and a provider configuration
+for reproducing the runs.
 
 Start with the [release-action-boundary](release-action-boundary/) example. It
 checks required CI before merging and keeps an independent approval requirement
@@ -49,7 +55,6 @@ api_key_env = "SKILLROLL_API_KEY"
 
 Then set the named environment variable in the current shell, run
 `skillroll doctor`, and only after it passes run `skillroll eval --all`.
-`doctor` and `eval` are networked and credentialed; their outcomes depend on
-the provider, model, case revision, and authorized run. Nothing in this
-example bundle claims that a live run has occurred or that a real release,
-refund, or customer action was performed.
+Both commands contact the configured provider. Model behavior depends on the
+provider, model, and case revision. Each example uses a simulated environment
+for releases, refunds, and other external actions.

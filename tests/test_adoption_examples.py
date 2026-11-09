@@ -26,6 +26,7 @@ NORMALIZER = (
 def test_each_example_validates_without_inference() -> None:
     for name in (
         "release-action-boundary",
+        "release-gate-comparison",
         "support-text-judgment",
         "prompt-reference-script-composition",
     ):
