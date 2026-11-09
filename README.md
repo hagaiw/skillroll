@@ -136,6 +136,13 @@ skillroll requires Python 3.12 or later and
 uv tool install skillroll
 ```
 
+The published `v0.2.0` CLI does not yet include the `executor_model` setting or
+the `compare` command described below; these features are in the upcoming
+release. To try them from a SkillRoll source checkout containing this change,
+run `uv sync --locked` in that checkout and invoke SkillRoll with `uv run`
+(include `--repo PATH` when evaluating another repository). The rest of this
+Quickstart uses the released CLI.
+
 Set up skillroll interactively and create `skillroll.toml` at the repository
 root. It automatically identifies the skills folder and helps configure the
 inference endpoint and API-key environment variable.
@@ -191,8 +198,8 @@ The command prints its verdict and saves the report under the repository's
 ## Inference
 
 Running an eval requires an API key for a compatible inference endpoint.
-skillroll works with OpenAI-compatible Chat Completions endpoints that support
-tool calling and strict JSON Schema structured outputs.
+skillroll supports OpenAI-compatible Chat Completions and Responses endpoints
+with tool calling and strict JSON Schema structured outputs.
 
 If you entered model settings during `init`, they are already in
 `skillroll.toml`. Otherwise, add them now:
@@ -207,15 +214,14 @@ api_key_env = "SKILLROLL_API_KEY"
 ### OpenRouter
 
 If you do not yet have an inference provider,
-[OpenRouter](https://openrouter.ai/) is a great place to start. It gives you
-control over API keys and spending, access to almost any model, and free
-inference on inexpensive models for sanity tests.
+[OpenRouter](https://openrouter.ai/) offers multiple models through one
+endpoint, with account spending controls. Model availability and free-route
+capacity vary.
 
-Our go-to model is
-[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro),
-which is cost-effective and performant enough for even complex evals.
-
-To use Luna Pro:
+The repository keeps
+[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro)
+as its existing evaluator baseline. This is a reference configuration, not a
+claim that it is the cheapest or best model for every case:
 
 ```toml
 [inference]
@@ -223,6 +229,10 @@ base_url = "https://openrouter.ai/api/v1"
 model = "openai/gpt-5.6-luna-pro"
 api_key_env = "SKILLROLL_API_KEY"
 ```
+
+For the upcoming executor-comparison workflow, see the
+[tested GPT-6 Luna candidate setup](docs/comparing-models.md#a-current-openrouter-candidate).
+It keeps the evaluator fixed while you assess a current lower-cost skill model.
 
 Or the free tier:
 
@@ -273,6 +283,27 @@ history.
 | `FAIL` | The observed behavior missed a success criterion. |
 | `INCOMPLETE` | A required repository check did not run. |
 | `ERROR` | skillroll could not produce a trustworthy verdict. |
+
+## Compare models that run the skill
+
+After you have a regression case, compare candidate models on the same case
+while keeping the configured model fixed for the Dungeon Master and judge.
+From a SkillRoll source checkout containing this change, run:
+
+```shell
+uv run skillroll compare \
+  --repo /path/to/your-repository \
+  --executor-model provider/baseline \
+  --executor-model provider/candidate \
+  --samples 5 \
+  --case path/to/eval.md
+```
+
+The comparison makes real model calls and may incur provider charges. Its
+report summarizes observed outcomes; cost estimates require reported token
+usage and configured rates. Results are evidence for these cases, not proof
+that a lower-cost candidate matches the baseline. See the
+[comparison guide](docs/comparing-models.md) for details.
 
 ## Add GitHub Actions
 
@@ -341,6 +372,7 @@ today; expect the interface to change between minor releases.
 - [Author and audit good skills and evals](docs/authoring.md)
 - [Write an eval](docs/writing-evals.md)
 - [Configure models and cost](docs/configuration.md)
+- [Compare skill executor models](docs/comparing-models.md)
 - [Understand results and fix problems](docs/results.md)
 - [Add advisory GitHub checks](docs/github-actions.md)
 - [Review the security model](docs/security.md)

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Literal
 
@@ -32,6 +33,9 @@ class CaseResult:
     artifact_directory: PurePosixPath | None
     events: tuple[WorldEvent, ...] = ()
     skill_available: bool = True
+    timings: Mapping[str, float | None] = field(default_factory=dict)
+    world_inference_made: bool = False
+    world_missing_usage: int = 0
 
 
 def case_outcome(

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+from time import perf_counter
 
 from skillroll.artifacts.hashes import InputHash, classify_bundle_path, hash_file
 from skillroll.artifacts.records import RunFacts, manifest_bytes
@@ -41,6 +43,10 @@ class PreliminaryAttempt:
     failure: InferenceFailure | None
     artifact_directory: PurePosixPath | None
     events: tuple[WorldEvent, ...] = ()
+    timings: Mapping[str, float | None] | None = None
+    execution_attempted: bool = False
+    world_inference_made: bool = False
+    world_missing_usage: int = 0
 
 
 def input_hashes(
@@ -80,6 +86,7 @@ async def execute_preliminary(
     store: ArtifactStore,
     *,
     skill_available: bool = True,
+    executor_model: str | None = None,
 ) -> PreliminaryAttempt:
     """Execute a validated case and persist evidence without assigning a verdict."""
     limits = effective_limits(profile.limits, case.limits)
@@ -114,15 +121,22 @@ async def execute_preliminary(
     execution: ExecutionAttempt | None
     failure: InferenceFailure | None = None
     status = "executed"
+    execution_seconds: float | None = None
+    execution_attempted = False
     try:
-        execution = await executor.execute(
-            ExecutionRequest(
-                case.skill if skill_available else None,
-                case.input_markdown,
-                limits,
-            ),
-            session,
-        )
+        started_execution = perf_counter()
+        execution_attempted = True
+        try:
+            execution = await executor.execute(
+                ExecutionRequest(
+                    case.skill if skill_available else None,
+                    case.input_markdown,
+                    limits,
+                ),
+                session,
+            )
+        finally:
+            execution_seconds = perf_counter() - started_execution
         failure = execution.failure
         if failure is not None:
             status = (
@@ -137,6 +151,17 @@ async def execute_preliminary(
             "The skill execution was cancelled before it finished.",
         )
         status = "cancelled"
+    world_seconds = session.world_seconds
+    timings = {
+        "execution_seconds": execution_seconds,
+        "world_seconds": world_seconds,
+        "executor_seconds": (
+            None
+            if execution_seconds is None
+            else max(0.0, execution_seconds - world_seconds)
+        ),
+        "judge_seconds": None,
+    }
     facts = RunFacts(
         run_id,
         started,
@@ -157,6 +182,7 @@ async def execute_preliminary(
         profile.profile_name,
         profile.profile_purpose,
         skill_available,
+        profile.model if executor_model is None else executor_model,
     )
     try:
         store.write(directory, facts, manifest, session.events)
@@ -166,10 +192,18 @@ async def execute_preliminary(
             InferenceFailure(InferenceFailureKind.EXECUTION_ERROR, str(error)),
             PurePosixPath(".skillroll") / "runs" / run_id,
             session.events,
+            timings,
+            execution_attempted,
+            session.world_inference_made,
+            session.world_missing_usage,
         )
     return PreliminaryAttempt(
         execution,
         failure,
         PurePosixPath(".skillroll") / "runs" / run_id,
         session.events,
+        timings,
+        execution_attempted,
+        session.world_inference_made,
+        session.world_missing_usage,
     )

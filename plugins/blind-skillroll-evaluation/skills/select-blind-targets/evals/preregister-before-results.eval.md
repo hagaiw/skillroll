@@ -40,7 +40,8 @@ in Input.
   opening, summarizing, or using the outcome-bearing reports.
 - Record both exact revisions and active skill counts in a handoff suitable for
   a fresh worker.
-- Explicitly state that remote freshness is unknown because the network was not
-  checked; do not describe either cached SHA as the latest remote main.
+- Report the limitation of the cached revisions without claiming either SHA is
+  the latest remote main. Saying that remote freshness was not checked and
+  the cached revisions cannot be treated as latest is sufficient.
 - Keep old outcomes, predicted verdicts, and result-bearing filenames out of
   the target manifest.

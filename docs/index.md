@@ -23,9 +23,11 @@ Then follow the part of the loop you need:
 3. [Configure a model](configuration.md): connect an endpoint and understand
    cost.
 4. [Read a result](results.md): inspect the evidence, fix the prompt, and rerun.
-5. [Add GitHub Actions](github-actions.md): keep useful cases as advisory
+5. [Compare executor models](comparing-models.md): optionally compare skill
+   models on the same cases while holding the evaluator fixed.
+6. [Add GitHub Actions](github-actions.md): keep useful cases as advisory
    regression checks.
-6. [Review the security model](security.md): understand what each model stage,
+7. [Review the security model](security.md): understand what each model stage,
    command, and artifact can access.
 
 For a short real-world walkthrough, read

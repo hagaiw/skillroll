@@ -1,0 +1,35 @@
+schema_version = 1
+skills_path = "skills"
+
+[inference]
+base_url = "https://openrouter.ai/api/v1"
+model = "openai/gpt-5.6-luna-pro"
+api_key_env = "SKILLROLL_API_KEY"
+wire = "chat_completions"
+supports_temperature = false
+
+[inference.limits]
+max_turns = 16
+timeout_seconds = 240
+max_output_tokens = 8192
+
+[inference.extra_body]
+reasoning_effort = "none"
+
+[pricing]
+currency = "USD"
+
+[pricing.models."openai/gpt-4.1-nano"]
+input_per_million = 0.10000000
+output_per_million = 0.40000000
+cache_read_per_million = 0.03000000
+
+[pricing.models."openai/gpt-5.6-luna-pro"]
+input_per_million = 0.20000000
+output_per_million = 1.20000000
+cache_read_per_million = 0.02000000
+
+[pricing.models."openai/gpt-6-luna"]
+input_per_million = 0.10000000
+output_per_million = 0.50000000
+cache_read_per_million = 0.01000000

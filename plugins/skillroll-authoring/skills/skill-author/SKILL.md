@@ -44,6 +44,11 @@ external effects.
 Read [skill authoring context](references/context.md) for the canonical quality
 standard, audit questions, repair method, and validation boundary.
 
+For a design-only request, label the response as a proposal. Distinguish
+structural validation, deterministic script tests, and live behavioral evidence
+as separate checks, and say which were not run rather than implying that the
+proposed package was implemented or tested.
+
 When improving an existing skill, distinguish a structural concern from an
 observed behavioral failure. Integrate the smallest supported repair into the
 responsible section and surrounding vocabulary. Validate structure and scripts;

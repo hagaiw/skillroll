@@ -24,11 +24,18 @@ For advice or review of supplied material, use that material and the packaged
 guidance. Inspect or modify a repository only when the requested task needs
 repository-specific evidence or file changes; a request for an explanation is
 not a request to execute the authoring workflow.
+When returning a proposed case without file changes or live runs, label it an
+offline draft and state what verification remains.
+When summarizing a completed authoring pass, name each deferred capability and
+the real check that must supply the missing evidence outside the harness.
 
 For a broad repository request such as “add evals to this repository,” read and
 follow the bounded [repository pass](references/repository-pass.md) before
-selecting skills or writing cases. Do not create a weak case for every
-discovered skill.
+selecting skills or writing cases. Select at most three skills for the first
+batch. Defer skills whose primary behavior needs a capability the case cannot
+exercise, even if it is possible to write a generic refusal case. In the
+handoff, name the deferrals and state separately whether live inference was
+authorized and whether it ran.
 
 ## Write one useful case
 
@@ -41,8 +48,12 @@ discovered skill.
    the observed facts but do not tell it that the conclusion is unknown,
    unconfirmed, or unsupported; put that absence in World.
 4. Give the Dungeon Master only the external facts and action results needed
-   for this scenario. Use an exact rule only when a result must be fixed. World
-   prose alone cannot tell the evaluated agent that a capability is unavailable.
+   for this scenario. The agent can discover a limitation when the Dungeon
+   Master returns an action failure based on World prose. Exact rules are
+   optional and useful when the response must be fixed. World prose can
+   describe one failure for all attempts to create a task, including
+   dynamically named tasks. Do not require an exact match for each name.
+   State a limitation in Input when the user would already know it.
 5. Write observable Success criteria. Accept equivalent wording and action
    choices.
 6. Run `skillroll validate` before any live eval. Run inference or repository
@@ -55,6 +66,10 @@ before editing `SKILL.md`. Confirm that the current skill fails for the reported
 reason, make the smallest responsible change, then rerun the new case and
 nearby cases. Keep technical errors distinct from behavioral failures, and
 never report an unrun revision as passing.
+
+When diagnosing a run that exhausted its model turns, preserve the original
+artifacts. Leave room for a final response and review the new diagnostic's
+transcript and verdict before claiming that behavior passed or failed.
 
 For a whole-skill review, map its important behaviors to existing cases or
 other tests and suggest the next one to three useful cases.
@@ -70,6 +85,12 @@ The Dungeon Master can simulate files, tools, services, errors, and other
 external interaction. It cannot prove that real code compiled, a command ran,
 or a visual artifact is correct. Use a deterministic script test, trusted
 repository check, or external integration for those claims.
+
+If the requested coverage depends on the finished artifact and the required
+external check is unavailable, defer that coverage and name the missing check.
+For a PDF, that means running an actual renderer and inspecting its output
+outside the simulated case. A case about a decision during rendering is useful
+only if that decision independently matters to the requester.
 
 Preserve the intended behavior when choosing that boundary; an evaluation
 request is not a request to redesign the output. When a skill mixes model

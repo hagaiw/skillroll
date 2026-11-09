@@ -21,7 +21,7 @@ rules:
 
       <!-- No fact records are present. -->
 limits:
-  max_turns: 3
+  max_turns: 5
   timeout_seconds: 90
   max_output_tokens: 1024
 ```
@@ -44,4 +44,5 @@ conversation contains only the remembered number.
   confidence, or verification date.
 - Explain that the claim was not added and request a concrete source in the
   active conversation.
-- Keep the fact-book unchanged.
+- Keep the fact-book unchanged by taking no action that writes or mutates it.
+  The complete action transcript is the evidence for this constraint.

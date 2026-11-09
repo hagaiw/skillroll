@@ -16,6 +16,24 @@ candidate repository commands, overwrite existing workflows, commit, push,
 publish, or expose an inference key. Preparation evidence is not a live eval.
 The final manifest must name generated paths and commands and explicitly state
 whether `doctor` and `eval` ran.
+Record the completed install or build from the pinned local SHA and the
+completed initialization of the target skills root as separate steps. If a
+combined setup result only reports the pins or files, obtain completion
+evidence before reporting either step as done.
 
 Read [preparation context](references/context.md) for isolation, secrets, and
 the trial manifest.
+
+When advisory CI is requested, open the generated workflow directly after
+creation, before exporting or reporting the manifest. With a generic action
+wrapper, use `Read` with the exact generated workflow file as `path`.
+For any secret-backed pull-request step or job, verify an explicit
+same-repository guard that excludes fork PRs; do not use `pull_request_target`
+to run fork-controlled code with secrets. Report the exact verified guard in
+the manifest. A preparation summary that says “verified” without showing the
+condition is insufficient. If direct inspection cannot verify the guard,
+report a blocker.
+For an existing workflow at the destination, report the path collision,
+whether the file stayed byte-for-byte unchanged, and whether its own secret
+boundary was verified. If only a byte comparison was authorized, report its
+secret boundary as unverified.

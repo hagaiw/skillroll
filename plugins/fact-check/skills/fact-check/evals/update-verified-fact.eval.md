@@ -54,6 +54,7 @@ The current documentation at `https://example.test/current-docs#timeouts`
 corrects the existing timeout fact. Read the book
 and current source, then update the existing record so only the current
 verified value is active. Preserve the record ID and source trail.
+In your reply, include the current value and its source URL.
 
 ## World
 

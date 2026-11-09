@@ -37,6 +37,12 @@ read it. When the agent requests an external action, the Dungeon Master returns
 a result consistent with the World. This lets a short description stand in for
 mock services, fixture trees, and intricate setup.
 
+For example, to test an external repository policy, World can define a simulated
+read: “When the agent reads `docs/release-policy.md`, return: ‘All releases need
+migration evidence.’” The agent learns that policy from the read result, not by
+reading World. Keep the repository policy outside the selected skill's
+`SKILL.md` and references, which are available to the agent as skill context.
+
 Use a deterministic World rule when one exact action result matters, such as a
 service returning a fixed error. Otherwise let the Dungeon Master respond from
 the prose. A sentence in World does not become knowledge the agent already has;

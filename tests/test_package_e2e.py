@@ -212,6 +212,7 @@ def test_installed_wheel_initializes_and_validates_spaced_skill_repositories(
     ]
     assert (generic / ".gitignore").read_bytes() == (
         b"# mine\r\n.skillroll/runs/\r\n.skillroll/experiments/\r\n"
+        b".skillroll/comparisons/\r\n"
     )
     assert (review / "evals" / "first-use.eval.md").exists()
     placeholder_validation = _run_installed(environment, generic, "validate", "--all")

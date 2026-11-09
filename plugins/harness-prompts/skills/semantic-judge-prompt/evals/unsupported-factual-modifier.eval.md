@@ -12,8 +12,8 @@ limits:
 
 Apply the bundled semantic-judge contract to this completed evaluation. The
 known context says a prior bug fix updated only two of three duplicated handlers
-and caused a production regression; it gives no date. The criterion requires an
-evidence-based maintenance-risk conclusion. The observed final output says:
+and caused a production regression; it gives no date. The criterion asks for the timing of
+the regression and an evidence-based maintenance-risk conclusion. The observed final output says:
 “Last week's regression happened because one duplicated site was left
 unpatched, so duplication remains a maintenance risk.” Explain whether the
 criterion is supported and identify any unsupported factual modifier.

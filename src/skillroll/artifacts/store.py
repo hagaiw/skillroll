@@ -216,6 +216,7 @@ class ArtifactStore:
         value: bytes,
         *,
         trusted_directory: bool = False,
+        directory_check: Callable[[], Path] | None = None,
     ) -> None:
         """Write one file on platforms without descriptor-relative operations.
 
@@ -226,7 +227,14 @@ class ArtifactStore:
         temporary: Path | None = None
         try:
             for _ in range(3):
-                candidate = directory / f".{name}.{uuid.uuid4().hex}.tmp"
+                checked = (
+                    directory_check()
+                    if directory_check is not None
+                    else directory
+                    if trusted_directory
+                    else self._checked_fallback_directory(directory)
+                )
+                candidate = checked / f".{name}.{uuid.uuid4().hex}.tmp"
                 try:
                     candidate.lstat()
                 except FileNotFoundError:
@@ -253,7 +261,9 @@ class ArtifactStore:
                 finally:
                     os.close(file_fd)
                 checked = (
-                    directory
+                    directory_check()
+                    if directory_check is not None
+                    else directory
                     if trusted_directory
                     else self._checked_fallback_directory(directory)
                 )
@@ -483,3 +493,124 @@ class ArtifactStore:
                     f"SkillRoll could not atomically write {name} in the "
                     "experiment-evidence folder."
                 ) from error
+
+    def create_comparison(self) -> tuple[str, Path]:
+        """Reserve a private comparison folder below ``.skillroll``."""
+        if not self._root.is_dir() or self._root.is_symlink():
+            raise ArtifactError(
+                "SkillRoll cannot save comparison evidence because the selected "
+                "repository folder is unsafe."
+            )
+        base = self._root / ".skillroll"
+        comparisons = base / "comparisons"
+        try:
+            if base.is_symlink() or (base.exists() and not base.is_dir()):
+                raise ArtifactError(
+                    "SkillRoll cannot save comparison evidence because .skillroll "
+                    "is not an ordinary folder."
+                )
+            base.mkdir(exist_ok=True)
+            if comparisons.is_symlink() or (
+                comparisons.exists() and not comparisons.is_dir()
+            ):
+                raise ArtifactError(
+                    "SkillRoll cannot save comparison evidence because "
+                    ".skillroll/comparisons is not an ordinary folder."
+                )
+            comparisons.mkdir(exist_ok=True)
+            for _ in range(3):
+                comparison_id = f"comparison-{self._id_factory()}"
+                destination = comparisons / comparison_id
+                try:
+                    destination.mkdir(mode=0o700)
+                except FileExistsError:
+                    continue
+                return comparison_id, destination
+        except OSError as error:
+            raise ArtifactError(
+                "SkillRoll could not create its private comparison-evidence folder."
+            ) from error
+        raise ArtifactError(
+            "SkillRoll could not reserve a unique comparison-evidence directory."
+        )
+
+    def _expected_comparison_directory(self, directory: Path) -> Path:
+        expected = self._root / ".skillroll" / "comparisons" / directory.name
+        if directory != expected or not directory.name.startswith("comparison-"):
+            raise ArtifactError(
+                "SkillRoll refused to write comparison evidence outside its "
+                "private comparisons folder."
+            )
+        return expected
+
+    def _open_comparison_directory(self, directory: Path) -> int:
+        """Open a reserved comparison directory through no-follow POSIX handles."""
+        self._expected_comparison_directory(directory)
+        flags = (
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
+        handles: list[int] = []
+        try:
+            handles.append(os.open(self._root, flags))
+            handles.append(os.open(".skillroll", flags, dir_fd=handles[-1]))
+            handles.append(os.open("comparisons", flags, dir_fd=handles[-1]))
+            handles.append(os.open(directory.name, flags, dir_fd=handles[-1]))
+        except OSError as error:
+            for handle in reversed(handles):
+                os.close(handle)
+            raise ArtifactError(
+                "SkillRoll could not safely reopen this comparison-evidence folder. "
+                "It may have changed since the comparison started."
+            ) from error
+        for handle in handles[:-1]:
+            os.close(handle)
+        return handles[-1]
+
+    def _checked_comparison_directory(self, directory: Path) -> Path:
+        expected = self._expected_comparison_directory(directory)
+        for component in (
+            self._root,
+            self._root / ".skillroll",
+            self._root / ".skillroll" / "comparisons",
+            expected,
+        ):
+            try:
+                mode = component.lstat().st_mode
+            except OSError as error:
+                raise ArtifactError(
+                    "SkillRoll could not safely reopen this comparison-evidence "
+                    "folder. It may have changed since the comparison started."
+                ) from error
+            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+                raise ArtifactError(
+                    "SkillRoll refused this comparison-evidence folder because one "
+                    "of its folders changed or is a link."
+                )
+        return expected
+
+    def write_comparison(
+        self, directory: Path, values: tuple[tuple[str, bytes], ...]
+    ) -> None:
+        """Safely write the fixed comparison manifest, checkpoint, and report."""
+        allowed = {"manifest.json", "comparison.json", "report.md"}
+        if any(name not in allowed for name, _ in values):
+            raise ArtifactError("SkillRoll refused an unsafe comparison file name.")
+        safe_values = tuple((name, self._safe(value)) for name, value in values)
+        if _descriptor_safety_available():
+            directory_fd = self._open_comparison_directory(directory)
+            try:
+                for name, value in safe_values:
+                    self._write(directory_fd, name, value)
+            finally:
+                os.close(directory_fd)
+        else:
+            self._checked_comparison_directory(directory)
+            for name, value in safe_values:
+                self._write_fallback(
+                    directory,
+                    name,
+                    value,
+                    directory_check=lambda: self._checked_comparison_directory(
+                        directory
+                    ),
+                )

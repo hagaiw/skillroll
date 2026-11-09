@@ -9,12 +9,16 @@ Choose a small, varied batch whose active skills plausibly serve individuals or
 small teams. Prefer repositories with a few focused skills over prominent
 marketplaces, large catalogs, and repositories already selected because their
 results are known.
+Explain fit using the observed number and purpose of active skills. Treat stars
+as a popularity signal and avoid claims about repository size unless measured.
 
 Inspect only enough repository metadata and skill inventory to establish fit.
 Before setup or inference, write a selection artifact containing the repository
 URL, exact target revision, active `SKILL.md` paths, selection reason, and any
 access or freshness limitation. Do not include prior SkillRoll outcomes or a
 prediction about which target will pass.
+For revisions taken from a local cache without a network check, state that
+remote freshness is unknown because it could not be checked.
 When a rejected candidate's recursive count is inflated by fixtures or vendored
 examples, record that distinction explicitly so the handoff does not repeat the
 misleading raw count.

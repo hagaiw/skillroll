@@ -56,8 +56,12 @@ def render_config(
 
 
 def render_ignore(existing: str | None) -> bytes:
-    """Add private run and experiment-artifact rules without other changes."""
-    rules = (".skillroll/runs/", ".skillroll/experiments/")
+    """Add private evidence rules without changing unrelated ignore entries."""
+    rules = (
+        ".skillroll/runs/",
+        ".skillroll/experiments/",
+        ".skillroll/comparisons/",
+    )
     if existing is None:
         return "".join(f"{rule}\n" for rule in rules).encode()
     lines = existing.splitlines()

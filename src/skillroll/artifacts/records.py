@@ -72,6 +72,7 @@ class RunFacts:
     profile_name: str | None = None
     profile_purpose: str | None = None
     skill_available: bool = True
+    executor_model: str | None = None
 
 
 def run_bytes(facts: RunFacts) -> bytes:
@@ -90,6 +91,11 @@ def run_bytes(facts: RunFacts) -> bytes:
             "model": facts.model,
             "name": facts.profile_name,
             "purpose": facts.profile_purpose,
+        },
+        "models": {
+            "executor": facts.executor_model or facts.model,
+            "world": facts.model,
+            "judge": facts.model,
         },
         "configured_limits": dict(facts.configured_limits),
         "effective_limits": dict(facts.effective_limits),
@@ -119,7 +125,8 @@ def report_bytes(facts: RunFacts) -> bytes:
         "",
         f"- Skill: `{facts.skill}`",
         f"- Eval case: `{facts.case}`",
-        f"- Model: `{facts.model}`",
+        f"- Executor model: `{facts.executor_model or facts.model}`",
+        f"- World and judge model: `{facts.model}`",
         "- Skill instructions: "
         + ("available" if facts.skill_available else "intentionally omitted"),
         "- Effective limits: "
@@ -202,6 +209,7 @@ def final_report_bytes(
     model_profile: str | None = None,
     model_profile_purpose: str | None = None,
     skill_available: bool = True,
+    executor_model: str | None = None,
 ) -> bytes:
     """Render a final report in terms a new maintainer can act on."""
     if finished is None:
@@ -223,7 +231,8 @@ def final_report_bytes(
         "- Skill finished: " + ("yes" if finished else "no"),
     ]
     if model is not None:
-        lines.insert(4, f"- Model: `{model}`")
+        lines.insert(4, f"- World and judge model: `{model}`")
+        lines.insert(5, f"- Executor model: `{executor_model or model}`")
         if model_profile is not None:
             lines.insert(5, f"- Model profile: `{model_profile}`")
             if model_profile_purpose is not None:
@@ -351,17 +360,23 @@ def execution_bytes(
     usage: object,
     *,
     turns_source: str = "unavailable",
+    executor_model: str | None = None,
+    world_judge_model: str | None = None,
 ) -> bytes:
     """Render completed execution facts before a repository check can begin."""
-    return canonical_json(
-        {
-            "format_version": ARTIFACT_FORMAT_VERSION,
-            "final_output": final_output,
-            "turns_used": turns,
-            "turns_source": turns_source,
-            "usage": usage,
+    value: dict[str, object] = {
+        "format_version": ARTIFACT_FORMAT_VERSION,
+        "final_output": final_output,
+        "turns_used": turns,
+        "turns_source": turns_source,
+        "usage": usage,
+    }
+    if executor_model is not None or world_judge_model is not None:
+        value["models"] = {
+            "executor": executor_model,
+            "world_and_judge": world_judge_model,
         }
-    )
+    return canonical_json(value)
 
 
 def judge_bytes(judge: object, exact_fact_checks: object) -> bytes:
@@ -412,11 +427,14 @@ def experiment_report_bytes(summary: Mapping[str, object]) -> bytes:
     interpretation = summary.get("interpretation")
     if not isinstance(interpretation, Mapping):
         interpretation = {}
+    executor_model = summary.get("executor_model", summary.get("model", "unknown"))
+    evaluator_model = summary.get("model", "unknown")
     lines = [
         "# SkillRoll comparison report",
         "",
         f"- Eval case: `{summary.get('case', 'selected cases')}`",
-        f"- Model: `{summary.get('model', 'unknown')}`",
+        f"- Executor model: `{executor_model}`",
+        f"- World and judge model: `{evaluator_model}`",
         f"- Samples: {summary.get('samples_requested', 'unknown')}",
         f"- Interpretation: **{interpretation.get('status', 'unknown')}**",
         "",

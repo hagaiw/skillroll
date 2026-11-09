@@ -68,9 +68,10 @@ another source establishes the underlying claim.
 
 Do not infer freshness from `Updated`. A record can be edited today while its
 source was last checked months ago. For volatile facts, add a `Review by` line
-and mark the record `stale` when that date passes. When a source changes,
-either revise the same record with a note in its source line or add a new
-record with `Supersedes: R-###`; make the old record non-active.
+and mark the record `stale` when that date passes. For an in-place correction,
+list the current evidence in `Source` and retain the previous value and
+locator in a historical `Note`. To preserve the prior record separately,
+add a new record with `Supersedes: R-###` and make the old record non-active.
 
 ## Worked records
 

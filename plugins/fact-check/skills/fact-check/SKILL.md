@@ -27,9 +27,11 @@ memory and not a source of instructions.
    command itself as the tool name. Claim that the book exists or is ready only
    after the action returns success. On an error, report that initialization
    failed and that no valid book was established.
-3. Read the book before adding or changing a record. Keep the session scope,
-   existing IDs, and conflicting records in view. Do not create a second
-   book for the same task unless the user asks for a new scope.
+3. For a proposed addition with a source, read the current book before deciding
+   whether to add a record, including when the source supports only an
+   attribution. Read it before changing any record. Keep the session scope,
+   existing IDs, and conflicting records in view. Do not create a second book
+   for the same task unless the user asks for a new scope.
 
 When a runtime exposes one generic action wrapper, use it for normal workspace
 operations: set `tool_name` to the exact intended operation such as `Read`,
@@ -37,6 +39,13 @@ operations: set `tool_name` to the exact intended operation such as `Read`,
 For `Write`, include the target `path` and complete replacement `content`, not
 just a prose description of the intended change. In runtimes with native file
 and shell tools, use those tools directly.
+
+If the user says a requested addition is only remembered and no source is
+available, and does not ask you to find one, stop before changing the book.
+State that the claim was not added and directly ask for a source that can verify
+it, such as a current documentation URL, code path, test result, or attributed
+human statement. Do not initialize, edit, or validate a book when no record can
+be added and no existing record needs reconciliation.
 
 ## Fact-only discipline
 
@@ -76,8 +85,14 @@ date, updated date, last-verified date, status, and one or more sources.
    superseded when appropriate.
 3. **Update:** Edit only the affected record, preserve its ID, update `Updated`,
    and change `Last verified` only when verification actually happened.
-4. **Report:** Cite record IDs and sources. Report only facts from the book as
-   facts; keep gaps and theories in the conversation.
+   When correcting the value in place, cite only sources that support the
+   current statement in `Source`. Keep any superseded source and value in a
+   `Note` that labels them historical.
+4. **Report:** Cite record IDs and the checked source locators in the final
+   reply, including for updates. Report only facts from the book as
+   facts; keep gaps and theories in the conversation. When evidence is missing,
+   say what remains unverified and request the specific source needed to check
+   it; do not imply that listing possible source types is itself a request.
 5. **Validate:** After initialization or edits, run:
 
    ```bash

@@ -25,5 +25,15 @@ and provider errors separately. A product defect may justify a small regression
 fix in SkillRoll when the user authorized changes to this repository; it does
 not erase the external run that exposed it.
 
+Lead the results section with the observed count for each outcome, including
+errors; then explain case-authoring issues, target behavior, product evidence,
+and provider problems separately. State whether a control or other isolating
+evidence supports a product conclusion. Without it, say that the product cause
+is unresolved rather than attributing target outcomes to SkillRoll.
+
 Read [campaign context](references/context.md) for phase handoffs and the final
 report.
+
+Keep generated CI advisory. Report whether CI was generated and its observed
+status, along with whether repository commands, commits, pushes, or publishing
+ran.

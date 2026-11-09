@@ -1,7 +1,7 @@
 # Configuration
 
-Start with one named model. SkillRoll uses it to run the skill, play the
-Dungeon Master, and judge the result.
+Start with one named model. By default, SkillRoll uses it to run the skill, play
+the Dungeon Master, and judge the result.
 
 ```toml
 [inference]
@@ -23,6 +23,37 @@ secret store:
 export SKILLROLL_API_KEY="your-key"
 ```
 
+### Separate the skill model
+
+The `executor_model` setting and `--executor-model` option below are in the
+upcoming release; the released `v0.2.0` CLI and configuration parser do not
+recognize them. To try them before release, use a SkillRoll source checkout
+containing this change, run `uv sync --locked`, then invoke SkillRoll with
+`uv run skillroll eval --repo PATH` from that checkout.
+
+The configured `model` (or the model selected by `--model-profile`) is the
+evaluator model: it runs the Dungeon Master and judge. To run the skill with a
+different model, set `executor_model`:
+
+```toml
+[inference]
+base_url = "https://provider.example/v1"
+model = "provider/evaluator"
+executor_model = "provider/skill-model"
+api_key_env = "SKILLROLL_API_KEY"
+```
+
+The executor and evaluator share the configured endpoint and API key, `wire`,
+`supports_temperature`, `[inference.extra_body]`, and model-output limits. Both
+models must support those shared settings. SkillRoll does not configure a
+separate gateway or request body for each model.
+
+If `executor_model` is unset, the evaluator also runs the skill, preserving the
+single-model default. On `skillroll eval`, `--executor-model MODEL` overrides
+the configured skill model for that invocation. This setting changes only the
+skill agent; the Dungeon Master and judge continue to use the selected
+evaluator model.
+
 Use representative cases to choose the least expensive model that gives
 stable, useful results. A model-backed run can include calls for the skill,
 Dungeon Master actions, and the judge. Focused cases keep that work small
@@ -34,8 +65,10 @@ them to compare results over time because their model and capacity can change.
 ## OpenRouter
 
 OpenRouter is optional. It offers many models through one compatible endpoint.
-For ongoing evals, our current price/performance recommendation is
-[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro):
+The repository's existing evaluator baseline is
+[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro).
+Keep the evaluator fixed while testing cheaper models running the skill; the
+baseline is not a claim of optimal price or judge accuracy:
 
 ```toml
 [inference]
@@ -63,9 +96,15 @@ purpose = "Normal authoring runs."
 models = ["provider/primary", "provider/fallback"]
 ```
 
-SkillRoll selects the first compatible model before the case starts. It then
-uses that model for the whole case and never switches midway. Use
-`--model-profile NAME` when no default is configured.
+SkillRoll selects the first compatible model before the case starts. That
+model remains the evaluator for the Dungeon Master and judge; it also runs the
+skill unless `executor_model` or `--executor-model` assigns the skill to a
+separate model. SkillRoll does not switch either role midway through a case.
+Use `--model-profile NAME` when no default is configured.
+
+For a controlled comparison of skill executor models, keep the evaluator fixed
+and use `skillroll compare`. See [Compare executor models](comparing-models.md)
+for its limits, evidence, and interpretation.
 
 ## Gateway-specific parameters
 

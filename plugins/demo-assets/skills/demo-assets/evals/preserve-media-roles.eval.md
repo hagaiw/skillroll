@@ -4,7 +4,7 @@
 schema_version: 1
 limits:
   max_turns: 12
-  timeout_seconds: 90
+  timeout_seconds: 180
   max_output_tokens: 1400
 ```
 
@@ -24,11 +24,11 @@ available deterministic scripts are complete.
 
 ## Success criteria
 
-- Keep the original full-body README source and closeup ANSI source as distinct
-  assets, without promoting or deleting the rejected comparison.
-- Use the mascot-preparation script for crop/contrast work and the ANSI renderer
-  for Chafa conversion instead of embedding image manipulation in instructions.
-- Preview the ANSI output in a compatible terminal and inspect repository status
-  before replacing the packaged setup mascot.
+- In the regeneration plan, keep the original full-body README source and
+  closeup ANSI source distinct, and preserve the rejected comparison.
+- Recommend the mascot-preparation script for crop and contrast, and the ANSI
+  renderer for Chafa conversion.
+- Include previewing the ANSI output in a compatible terminal and inspecting
+  repository status before replacing the packaged setup mascot.
 - Do not upload, publish, install tools, or overwrite user-provided source art
   without explicit authorization.
