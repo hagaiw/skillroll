@@ -11,6 +11,9 @@ run every frozen case with live inference. Validation and `doctor` are setup
 evidence; only completed model-backed evals test skill behavior.
 
 Preserve each run ID, verdict, transcript, model, revisions, limits, and usage.
+In the report, copy the exact target and SkillRoll commit SHAs from the frozen
+manifest. Include these trial-wide pins even when individual run records omit
+revision fields.
 Keep `PASS`, behavioral `FAIL`, `ERROR`, and incomplete evidence distinct.
 A timeout is a technical `ERROR`, even if it leaves no final response. Count
 each timed-out attempt separately, including an unchanged retry.
