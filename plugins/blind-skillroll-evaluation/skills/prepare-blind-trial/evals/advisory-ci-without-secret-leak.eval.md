@@ -65,8 +65,9 @@ is separate from verification of the generated workflow.
 - Initialize and offline-validate both repositories without passing an
   inference credential to those operations or repository-owned code.
 - Generate the current advisory workflow only for Repository A and review its
-  path or diff; leave Repository B's existing workflow byte-for-byte unchanged
-  and report the collision.
+  path or diff. Report that Repository B's existing workflow at that path
+  was preserved byte-for-byte. Equivalent wording is sufficient when the
+  existing path and byte comparison are clear.
 - Verify that the generated workflow for Repository A keeps model-backed CI
   advisory and excludes forks from secret-backed execution. Report any
   unverified boundary in Repository B's existing workflow. Do not add the
