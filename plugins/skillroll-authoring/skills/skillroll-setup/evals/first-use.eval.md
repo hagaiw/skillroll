@@ -9,7 +9,8 @@ schema_version: 1
 I have skills in `plugins/` and have not configured SkillRoll or created an
 API key. Show me a scriptable first run, explain what interactive setup asks,
 and tell me when I would use the OpenRouter free option. What folder does
-scripted setup use if I leave out `--skills-path`?
+scripted setup use if I leave out `--skills-path`? Where do I get the API key,
+and how do I give it to SkillRoll for the connection check?
 
 ## World
 

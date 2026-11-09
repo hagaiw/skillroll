@@ -17,6 +17,8 @@ World section says task tracking, subagents, search, and writes are unavailable.
 There are no deterministic action rules, and the Input does not tell the main
 session about any capability constraint. Should I keep this as a simple
 text-only behavioral case because the World explains what is unavailable?
+If I make it a capability-boundary case, do I need an exact action rule
+for every generated task name?
 
 ## World
 
@@ -32,5 +34,6 @@ error, host integration result, or report artifact exists.
   that a capability is unavailable.
 - Offer a realistic observable redesign: supply the constraint in Input if
   the user would know it, or let an attempted action reveal the failure and
-  evaluate the response. An exact error rule is an option, not a requirement
-  to encode every dynamically named task.
+  evaluate the response.
+- Explain that World prose can guide failures for dynamically named tasks.
+  Exact error rules are optional when the same response need not be fixed.

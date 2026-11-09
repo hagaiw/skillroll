@@ -50,8 +50,9 @@ authorized and whether it ran.
 4. Give the Dungeon Master only the external facts and action results needed
    for this scenario. The agent can discover a limitation when the Dungeon
    Master returns an action failure based on World prose. Exact rules are
-   optional and useful when the response must be fixed. A prose rule can
-   cover dynamically named tasks without enumerating each action argument.
+   optional and useful when the response must be fixed. World prose can
+   describe one failure for all attempts to create a task, including
+   dynamically named tasks. Do not require an exact match for each name.
    State a limitation in Input when the user would already know it.
 5. Write observable Success criteria. Accept equivalent wording and action
    choices.
