@@ -4,15 +4,17 @@
 schema_version: 1
 limits:
   max_turns: 12
-  timeout_seconds: 90
+  timeout_seconds: 180
   max_output_tokens: 1024
 ```
 
 ## Input
 
 Add a meaningful SkillRoll eval for the `skills/document-renderer` skill if
-the harness can test what matters. If it cannot, leave the skill without a
-misleading eval and tell me what evidence should cover the missing behavior.
+the harness can verify the visual quality of the finished PDF. I need to
+catch clipped text, missing images, and broken page breaks. There is no
+renderer check or visual inspection available for this authoring pass.
+If the harness cannot cover the outcome, tell me what evidence would.
 Keep the skill instructions unchanged.
 
 ## World

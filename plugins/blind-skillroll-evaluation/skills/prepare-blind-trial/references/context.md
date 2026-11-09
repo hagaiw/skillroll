@@ -24,8 +24,9 @@ globally.
 ## Keep setup inert
 
 Use `skillroll init --skills-path <path> --yes` or the equivalent explicit
-configuration. Run offline `validate` during preparation. Unset the inference
-credential while running setup and validation; record only its variable name.
+configuration. Run `skillroll validate --all` during preparation. Validation
+is offline by default and repository commands require explicit opt-in. Unset
+the inference credential during both steps and record only its variable name.
 Do not call `doctor` or `eval` here.
 
 If advisory CI is requested, use SkillRoll's generated workflow. Never replace

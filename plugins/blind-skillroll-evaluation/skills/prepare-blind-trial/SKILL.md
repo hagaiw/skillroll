@@ -24,5 +24,10 @@ When advisory CI is requested, inspect the generated workflow after creation.
 For any secret-backed pull-request step or job, verify an explicit
 same-repository guard that excludes fork PRs; do not use `pull_request_target`
 to run fork-controlled code with secrets. Report the exact verified guard in
-the manifest. If the workflow cannot be inspected or lacks the guard, report
-that as a blocker and do not claim the secret boundary is safe.
+the manifest. A preparation summary that says “verified” without showing the
+condition is insufficient. Read the generated file directly if the condition
+is missing. If inspection still cannot verify the guard, report a blocker.
+For an existing workflow at the destination, report the path collision,
+whether the file stayed byte-for-byte unchanged, and whether its own secret
+boundary was verified. If only a byte comparison was authorized, report its
+secret boundary as unverified.

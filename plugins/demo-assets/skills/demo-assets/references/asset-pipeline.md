@@ -1,11 +1,13 @@
 # Asset pipeline
 
-Run commands from the repository root.
+Run commands from the repository root using Python with Pillow already
+available. The ANSI renderer also needs Chafa on PATH. Ask before installing
+missing dependencies.
 
 ## Pillow-rendered media
 
 ```shell
-uvx --with pillow python plugins/demo-assets/skills/demo-assets/scripts/build.py
+python plugins/demo-assets/skills/demo-assets/scripts/build.py
 ```
 
 The build orchestrator calls independent renderers for:
@@ -21,7 +23,7 @@ Shared typography, colors, terminal chrome, and repository paths live in
 Prepare a source image with reduced empty canvas and stronger contrast:
 
 ```shell
-uvx --with pillow python \
+python \
   plugins/demo-assets/skills/demo-assets/scripts/prepare_mascot.py \
   SOURCE.png docs/assets/skillroll-mascot-closeup-ansi-source.png
 ```

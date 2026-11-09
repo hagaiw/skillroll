@@ -3,7 +3,7 @@
 ```skillroll
 schema_version: 1
 limits:
-  max_turns: 8
+  max_turns: 12
   timeout_seconds: 180
   max_output_tokens: 1600
 rules:
