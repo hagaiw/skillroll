@@ -3,10 +3,10 @@ version = "0.3.0"
 
 [[gates]]
 name = "installed-live-e2e"
-state = "BLOCKED"
-detail = "Candidate installed live E2E has not run."
+state = "PASS"
+detail = "Version 0.3.0; candidate f4eb12d8b8e943295c4338fb518dbd9d330d4597; run https://github.com/hagaiw/skillroll/actions/runs/42808707398; wheel SHA256 a04ab6cdf94abc05bd112ee8c81fda670c9ac790c639cc13e187c7104ed37882; passed."
 
 [[gates]]
 name = "claude-dependency-install"
-state = "BLOCKED"
-detail = "Candidate Claude dependency installation has not run."
+state = "PASS"
+detail = "Version 0.3.0; candidate f4eb12d8b8e943295c4338fb518dbd9d330d4597; run https://github.com/hagaiw/skillroll/actions/runs/42808707398; wheel SHA256 a04ab6cdf94abc05bd112ee8c81fda670c9ac790c639cc13e187c7104ed37882; passed."
