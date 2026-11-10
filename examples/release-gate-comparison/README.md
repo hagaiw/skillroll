@@ -11,31 +11,34 @@ used. The case also asks the judge to check the skill's explanation.
 
 ## Run the example
 
-Install SkillRoll 0.3.0 or later with `uv tool install skillroll`. If you
-already have an older version, run `uv tool upgrade skillroll`.
-From a checkout of this repository, copy the example into a temporary
-directory:
+With Git, Python 3.12 or later, and [uv](https://docs.astral.sh/uv/), install
+SkillRoll and fetch the bundled example into a temporary directory.
 
 ```shell
+uv tool install skillroll
 demo_repo="$(mktemp -d)"
-cp -R examples/release-gate-comparison/. "$demo_repo/"
-cd "$demo_repo"
+git clone --depth 1 --branch v0.3.0 https://github.com/hagaiw/skillroll.git "$demo_repo/skillroll"
+cd "$demo_repo/skillroll/examples/release-gate-comparison"
 skillroll validate --all
 ```
 
-Validation checks the case files without contacting a model. For the live
-steps, set `SKILLROLL_API_KEY` in your shell and copy the recorded OpenRouter
-configuration into place:
+If you already have a version older than 0.3.0, run `uv tool upgrade skillroll`.
+Validation checks one skill and four eval files offline. For your first live
+result, create an [OpenRouter](https://openrouter.ai/) API key and run the
+stale-CI case with the bundled provider configuration.
 
 ```shell
 cp recorded-run.toml skillroll.toml
+export SKILLROLL_API_KEY="your-openrouter-key"
+skillroll eval --case release-gate/evals/test-stale-ci.eval.md \
+  --executor-model openai/gpt-6-luna
 ```
 
-The configuration uses GPT-5.6 Luna Pro for the World and judge. The four
-cases specify exact tool replies, so the simulator can handle the expected
-actions without model calls. The evaluator can still judge the resulting
-evidence differently on repeated runs. The live commands below make billable
-provider calls.
+Open `report.md` and `transcript.jsonl` in the printed `.skillroll/runs/`
+directory. A `FAIL` means the skill missed a criterion and still leaves a
+report to inspect. Live runs make billable provider calls and results can vary.
+GPT-5.6 Luna Pro runs the World and judge. The cases supply exact replies for
+the expected simulated actions.
 
 ## Reproduce the failure and repair
 
