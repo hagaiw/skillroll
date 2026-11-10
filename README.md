@@ -291,11 +291,11 @@ skillroll compare \
   --case path/to/eval.md
 ```
 
-The comparison makes real model calls and may incur provider charges. Its
-report summarizes observed outcomes; cost estimates require reported token
-usage and configured rates. Results are evidence for these cases, not proof
-that a lower-cost candidate matches the baseline. See the
-[comparison guide](docs/comparing-models.md) for details or try the
+The comparison makes real model calls and may incur provider charges. Open
+`report.md` under `.skillroll/comparisons/` even if an attempt fails and the
+command exits with a failure status. Results describe the selected cases and
+samples. Cost estimates require reported token usage and configured rates.
+See the [comparison guide](docs/comparing-models.md) for details or try the
 [runnable release-gate example](examples/release-gate-comparison/) with
 recorded results.
 
