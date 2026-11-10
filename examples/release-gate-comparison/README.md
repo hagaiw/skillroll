@@ -11,8 +11,8 @@ used. The case also asks the judge to check the skill's explanation.
 
 ## Run the example
 
-Use SkillRoll 0.3.0 or later. To use a local release candidate, install the
-wheel with `uv tool install /path/to/skillroll-0.3.0-py3-none-any.whl`.
+Install SkillRoll 0.3.0 or later with `uv tool install skillroll`. If you
+already have an older version, run `uv tool upgrade skillroll`.
 From a checkout of this repository, copy the example into a temporary
 directory:
 

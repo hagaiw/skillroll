@@ -1,11 +1,7 @@
 # Compare executor models
 
-The `compare` command and executor model options in this guide are in the
-upcoming release and are not in the released `v0.2.0` CLI. To try them before
-release, use a SkillRoll source checkout containing this change: run
-`uv sync --locked`, then run the command with `uv run skillroll` and `--repo
-PATH` for the repository you want to evaluate. After release, use the
-installed `skillroll` command from that repository.
+Install SkillRoll 0.3.0 or later with `uv tool install skillroll`. If you
+already have an older version, run `uv tool upgrade skillroll`.
 
 `skillroll compare` runs the same selected cases with several candidate models
 as the skill executor. The configured `model`, or the model chosen by
@@ -18,12 +14,11 @@ This command makes real model calls and may incur provider charges. The
 
 ## Run a comparison
 
-Use one or more cases that represent the behavior you care about. This example
+Run from the repository with your configured skill and evals. This example
 runs five samples on one eval:
 
 ```shell
-uv run skillroll compare \
-  --repo /path/to/your-repository \
+skillroll compare \
   --executor-model provider/baseline \
   --executor-model provider/candidate \
   --samples 5 \
@@ -65,11 +60,10 @@ supports_temperature = false
 reasoning_effort = "none"
 ```
 
-From the source checkout, compare the candidates on your own cases:
+From your repository, compare the candidates on your own cases:
 
 ```shell
-uv run skillroll compare \
-  --repo /path/to/your-repository \
+skillroll compare \
   --executor-model openai/gpt-5.6-luna-pro \
   --executor-model openai/gpt-5.6-luna \
   --executor-model openai/gpt-6-luna \

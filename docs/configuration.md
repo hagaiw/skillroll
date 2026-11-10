@@ -25,11 +25,8 @@ export SKILLROLL_API_KEY="your-key"
 
 ### Separate the skill model
 
-The `executor_model` setting and `--executor-model` option below are in the
-upcoming release; the released `v0.2.0` CLI and configuration parser do not
-recognize them. To try them before release, use a SkillRoll source checkout
-containing this change, run `uv sync --locked`, then invoke SkillRoll with
-`uv run skillroll eval --repo PATH` from that checkout.
+The `executor_model` setting and `--executor-model` option require SkillRoll
+0.3.0 or later.
 
 The configured `model` (or the model selected by `--model-profile`) is the
 evaluator model: it runs the Dungeon Master and judge. To run the skill with a
