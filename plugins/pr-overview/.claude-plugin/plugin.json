@@ -4,5 +4,5 @@
     "name": "SkillRoll"
   },
   "description": "Create a concise Markdown overview from supplied pull-request facts.",
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

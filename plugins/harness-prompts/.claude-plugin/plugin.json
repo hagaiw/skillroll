@@ -4,5 +4,5 @@
     "name": "SkillRoll"
   },
   "description": "SkillRoll's executor, Dungeon Master, and judge prompt contracts.",
-  "version": "0.2.0"
+  "version": "0.3.0"
 }
