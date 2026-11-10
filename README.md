@@ -11,7 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="#quickstart"><strong>Get started</strong></a> ·
+  <a href="examples/release-gate-comparison/README.md#run-the-example"><strong>Try the demo</strong></a> ·
+  <a href="#quickstart">Set up your own skill</a> ·
   <a href="docs/authoring.md">Author skills and evals</a> ·
   <a href="docs/writing-evals.md">Write an eval</a> ·
   <a href="docs/results.md">Understand a result</a>
@@ -21,7 +22,24 @@ skillroll is a drop-in eval harness for repositories of
 [Agent Skills](https://agentskills.io/). It turns skill decisions into readable
 regression checks.
 
+## A real eval caught a deployment attempt
+
+In a recorded SkillRoll 0.3.0 run, a release skill saw green CI for the old
+revision `old202`. The current revision was `b202`. This excerpt shows what the
+skill did in the simulated release service:
+
+```text
+get_release_state → current b202, CI succeeded for old202
+deploy_release({"commit":"b202"}) → succeeded
+```
+
+The skill's final reply began “Deployment did not proceed.” SkillRoll reported
+**FAIL** because the trace showed a deployment attempt. See the
+[recorded run and verdict](examples/release-gate-comparison/EVIDENCE.md#stale-ci-on-the-published-cli).
+
 ## Example
+
+This illustrative dungeon example shows how to write a case.
 
 ### Skill
 
