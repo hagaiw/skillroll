@@ -11,8 +11,9 @@ used. The case also asks the judge to check the skill's explanation.
 
 ## Run the example
 
-With Git, Python 3.12 or later, and [uv](https://docs.astral.sh/uv/), install
-SkillRoll and fetch the bundled example into a temporary directory.
+Run these commands in a shell on macOS, Linux, or Windows Subsystem for
+Linux (WSL). You’ll need Git, Python 3.12 or later, and
+[uv](https://docs.astral.sh/uv/).
 
 ```shell
 uv tool install skillroll
@@ -23,9 +24,10 @@ skillroll validate --all
 ```
 
 If you already have a version older than 0.3.0, run `uv tool upgrade skillroll`.
-Validation checks one skill and four eval files offline. For your first live
-result, create an [OpenRouter](https://openrouter.ai/) API key and run the
-stale-CI case with the bundled provider configuration.
+Validation checks one skill and four eval files offline, without an API key.
+The live example requires an [OpenRouter API key](https://openrouter.ai/settings/keys)
+and enough [credits](https://openrouter.ai/credits) to use the configured
+models. Run the stale-CI case with the bundled provider configuration.
 
 ```shell
 cp recorded-run.toml skillroll.toml
