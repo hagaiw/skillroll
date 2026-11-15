@@ -1408,7 +1408,10 @@ def test_experiment_report_handles_malformed_and_complete_optional_sections() ->
             "skill_runs": {"PASS": 1},
         }
     ).decode()
-    assert "| 1 | PASS | not run | useful | `a` |" in detailed
+    assert (
+        "| 1 | PASS | not run | useful | [With skill](../../runs/a/report.md) |"
+        in detailed
+    )
 
 
 def test_fallback_append_writes_check_logs_and_rejects_unsafe_log_folder(
@@ -1510,7 +1513,9 @@ def test_evaluate_repository_runs_one_preflight_execution_judge_and_check(
     result_text = (directory / "result.json").read_text(encoding="utf-8")
     assert '"format_version":2' in result_text
     assert '"semantic_judgment"' in result_text
-    assert "preliminary" not in (directory / "report.md").read_text(encoding="utf-8")
+    report = (directory / "report.md").read_text(encoding="utf-8")
+    assert "preliminary" not in report
+    assert "[Final response](execution.json)" in report
     assert transport.closed
 
 
@@ -1568,8 +1573,16 @@ def test_authoring_experiment_pairs_skill_and_omission_runs(tmp_path: Path) -> N
     assert transport.closed
     experiment_dir = tmp_path / result.artifact_directory
     assert (experiment_dir / "result.json").exists()
-    assert (experiment_dir / "report.md").exists()
+    report = (experiment_dir / "report.md").read_text(encoding="utf-8")
+    assert pair.skill.artifact_directory is not None
     assert pair.control.artifact_directory is not None
+    for label, path in (
+        ("With skill", pair.skill.artifact_directory),
+        ("Without skill", pair.control.artifact_directory),
+    ):
+        target = f"../../runs/{path.name}/report.md"
+        assert f"[{label}]({target})" in report
+        assert (experiment_dir / target).is_file()
     control_dir = tmp_path / pair.control.artifact_directory
     control_run = json.loads((control_dir / "run.json").read_text())
     assert control_run["skill_instructions_available"] is False

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 
 from skillroll.artifacts.hashes import InputHash
 from skillroll.world.session import WorldEvent
@@ -200,6 +201,7 @@ def final_report_bytes(
     failure_details: tuple[str, ...] = (),
     *,
     finished: bool | None = None,
+    execution_recorded: bool = False,
     events: tuple[WorldEvent, ...] = (),
     execution_turns: int | None = None,
     execution_turn_limit: int | None = None,
@@ -239,6 +241,8 @@ def final_report_bytes(
                 lines.insert(6, f"- Profile purpose: {model_profile_purpose}")
     if execution_turns is not None:
         lines.append(f"- Skill turns: {execution_turns}")
+    if execution_recorded:
+        lines.extend(("", "[Final response](execution.json)"))
     lines.extend(("", "## Actions", ""))
     if not events:
         lines.append("No action completed.")
@@ -456,18 +460,16 @@ def experiment_report_bytes(summary: Mapping[str, object]) -> bytes:
             control = pair.get("skill_control_run")
             skill = skill if isinstance(skill, Mapping) else {}
             control = control if isinstance(control, Mapping) else {}
-            evidence = " ".join(
-                str(path)
-                for path in (
-                    skill.get("artifact_directory", ""),
-                    control.get("artifact_directory", ""),
-                )
-                if path
+            evidence = " · ".join(
+                f"[{label}](../../runs/{PurePosixPath(path).name}/report.md)"
+                for label, run in (("With skill", skill), ("Without skill", control))
+                if isinstance(path := run.get("artifact_directory"), str) and path
             )
             lines.append(
                 f"| {pair.get('sample', '?')} | {skill.get('outcome', 'unknown')} | "
                 f"{control.get('outcome', 'not run')} | "
-                f"{pair.get('control_interpretation', 'not recorded')} | `{evidence}` |"
+                f"{pair.get('control_interpretation', 'not recorded')} | "
+                f"{evidence or '—'} |"
             )
     lines.extend(("", "## Counts", ""))
     for name in ("skill_runs", "skill_control_runs"):

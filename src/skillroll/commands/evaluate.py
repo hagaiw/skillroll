@@ -904,6 +904,7 @@ async def evaluate_repository(
             assertions: tuple[AssertionResult, ...] = ()
             judged: JudgeResult | None = None
             judge_attempted = False
+            execution_recorded = False
             timings: dict[str, float | None] = {
                 "execution_seconds": None,
                 "world_seconds": None,
@@ -980,6 +981,7 @@ async def evaluate_repository(
                             ),
                         ),
                     )
+                    execution_recorded = True
                 except ArtifactError as error:
                     failure = InferenceFailure(
                         InferenceFailureKind.EXECUTION_ERROR, str(error)
@@ -1105,6 +1107,7 @@ async def evaluate_repository(
                                     if failure is None
                                     else bounded_failure_details(failure, redactor),
                                     finished=execution is not None,
+                                    execution_recorded=execution_recorded,
                                     events=preliminary.events,
                                     execution_turns=(
                                         None if execution is None else execution.turns

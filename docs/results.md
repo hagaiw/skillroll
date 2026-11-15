@@ -21,17 +21,19 @@ problems without calling a model.
 Model-backed runs are private by default under `.skillroll/runs/<run-id>/`.
 The main files are:
 
-- `report.md`: the result for a person to read;
+- `report.md`: the verdict, evidence, and a link to the final response when saved;
+- `execution.json`: the skill’s final response and execution details;
 - `transcript.jsonl`: the skill's actions and the Dungeon Master's replies; and
 - `result.json`: the result for automation.
 
-The same directory also preserves the selected inputs, final response, judge
-decision, repository checks, and final verdict as JSON. Together they show what
+The same directory also preserves the selected inputs, judge decision,
+repository checks, and final verdict as JSON. Together they show what
 ran and why SkillRoll reached its outcome.
 
 Sampled runs and no-skill comparisons live under
 `.skillroll/experiments/`. Their comparison helps diagnose a case; it is not a
-second verdict. When the GitHub Action uploads evidence, it includes both that
+second verdict. The experiment report links to the individual run reports.
+When the GitHub Action uploads evidence, it includes both that
 parent directory and the per-run evidence under `.skillroll/runs/`.
 
 Independent executor-model comparisons are saved under
