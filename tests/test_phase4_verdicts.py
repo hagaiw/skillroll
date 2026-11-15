@@ -1989,9 +1989,11 @@ def test_evaluate_uses_ranked_fallback_only_during_preflight(tmp_path: Path) -> 
     assert '"model_profile":"baseline"' in summary
 
 
-@pytest.mark.parametrize("failing_append", [1, 2])
+@pytest.mark.parametrize(
+    "failing_artifact", ["execution.json", "judge.json", "result.json"]
+)
 def test_evaluate_repository_turns_evidence_append_errors_into_case_errors(
-    tmp_path: Path, failing_append: int
+    tmp_path: Path, failing_artifact: str
 ) -> None:
     case = case_at(tmp_path)
     config = SkillRollConfig(
@@ -2005,15 +2007,13 @@ def test_evaluate_repository_turns_evidence_append_errors_into_case_errors(
     config.config_path.write_text("schema_version = 1", encoding="utf-8")
 
     class FailingStore(ArtifactStore):
-        calls = 0
-
         def append(
             self, directory: Path, values: tuple[tuple[str, bytes], ...]
         ) -> None:
-            self.calls += 1
-            if self.calls == failing_append:
-                raise ArtifactError("append failed")
-            super().append(directory, values)
+            for name, value in values:
+                if name == failing_artifact:
+                    raise ArtifactError("append failed")
+                super().append(directory, ((name, value),))
 
     transport = ScriptedTransport(preflight_responses())
     result = asyncio.run(
@@ -2029,6 +2029,13 @@ def test_evaluate_repository_turns_evidence_append_errors_into_case_errors(
     )
     assert not isinstance(result, InferenceFailure)
     assert result[0].outcome == "ERROR" and result[0].failure is not None
+    assert result[0].artifact_directory is not None
+    directory = tmp_path / result[0].artifact_directory
+    if failing_artifact != "result.json":
+        report = (directory / "report.md").read_text(encoding="utf-8")
+        execution_saved = failing_artifact == "judge.json"
+        assert (directory / "execution.json").is_file() == execution_saved
+        assert ("[Final response](execution.json)" in report) == execution_saved
 
 
 def test_evaluate_repository_preserves_preliminary_errors_without_judging(

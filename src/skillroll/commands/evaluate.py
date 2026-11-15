@@ -972,6 +972,12 @@ async def evaluate_repository(
                                     world_judge_model=profile.model,
                                 ),
                             ),
+                        ),
+                    )
+                    execution_recorded = True
+                    store.append(
+                        directory,
+                        (
                             (
                                 "judge.json",
                                 judge_bytes(
@@ -981,7 +987,6 @@ async def evaluate_repository(
                             ),
                         ),
                     )
-                    execution_recorded = True
                 except ArtifactError as error:
                     failure = InferenceFailure(
                         InferenceFailureKind.EXECUTION_ERROR, str(error)
