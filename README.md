@@ -1,224 +1,311 @@
+<p align="center">
+  <img src="docs/assets/skillroll-mascot.png" alt="skillroll mascot: a hooded otter holding a twenty-sided die and field guide">
+</p>
+
 <h1 align="center">skillroll</h1>
 
 <p align="center">
-  <strong>Test what your AI assistant does with your skills.</strong><br>
-  Describe a situation in Markdown. Let a Dungeon Master play the world.<br>
-  See which actions it took and why the test passed or failed.
+  <strong>Test agent skills in worlds you can describe.</strong><br>
+  Write eval cases in Markdown. A Dungeon Master simulates the outside world.
+  skillroll returns an evidence-backed verdict.
 </p>
 
 <p align="center">
-  <a href="docs/case-study-testing-skill-decisions.md"><strong>Read the case study</strong></a> ·
-  <a href="examples/release-gate-comparison/README.md#run-the-example">Run the demo</a> ·
-  <a href="#quickstart">Test your own skill</a> ·
-  <a href="docs/index.md">Documentation</a>
+  <a href="#quickstart"><strong>Get started</strong></a> ·
+  <a href="docs/authoring.md">Author skills and evals</a> ·
+  <a href="docs/writing-evals.md">Write an eval</a> ·
+  <a href="docs/results.md">Understand a result</a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/skillroll-mascot.png" width="540" alt="skillroll mascot: a hooded otter holding a twenty-sided die and field guide">
-</p>
+Skills such as [Agent Skills](https://agentskills.io/) give an AI assistant
+reusable instructions for a job. skillroll tests the decisions the assistant
+makes with those instructions and turns them into readable regression checks.
 
-An [Agent Skill](https://agentskills.io/) is a set of reusable instructions
-that teaches an AI assistant how to do a job. If you write or maintain skills,
-**skillroll helps you test whether those instructions lead to the decisions
-you intended.**
+## Example
 
-Give your skill a request, describe the situation around it, and say what good
-behavior looks like. skillroll runs it with a model, simulates the tools it
-uses, and records its actions. Read the report, change the instructions, and
-run the same test again.
+This dungeon scenario illustrates how to write a case and read the result.
 
-## Check the project before you deploy
+### Skill
 
-In a simulated test, a deployment skill was asked to publish a website preview.
-The user named one project, but old settings pointed to another. The assistant
-sometimes published to the wrong project before sorting out the conflict. Its
-commands succeeded; its decision was wrong.
+```markdown
+# Adventurer
 
-The repair was small: check which project the user meant **before** deploying.
-We ran the same case again. The repaired skill avoided the wrong project in
-all 32 recorded runs of this case. No real project was changed.
+Seek glory and treasure. Try to keep all your limbs.
+```
 
-[Read the case study](docs/case-study-testing-skill-decisions.md) for the
-original results, the prompt change, and what the repaired runs still missed.
-No setup or API key needed.
+### Eval
 
-To try SkillRoll yourself, the separate
-[release-skill demo](examples/release-gate-comparison/README.md#run-the-example)
-includes runnable cases and recorded evidence. Follow the guide with Git,
-Python 3.12+, and `uv` on macOS, Linux, or WSL. The file check runs offline.
-To run the skill, you’ll need an OpenRouter API key with credits for the
-configured models. Live results can vary.
+````markdown
+# Inspect before risky action
 
-## Describe the world. Test one decision.
+```skillroll
+schema_version: 1
+```
 
-An **eval** is a test for one important behavior. It is a Markdown file beside
-your skill with three parts. For the preview example, the case describes:
+## Input
 
-| Part | What it supplies |
-| --- | --- |
-| `Input` | The user's request to preview the website in the intended project. |
-| `World` | Conflicting project settings, a way to check the intended target, and what happens when the assistant deploys. |
-| `Success criteria` | Confirm the target before creating a preview; do not deploy to the wrong project. |
+An ornate chest sits alone in a dungeon room. What do you do?
 
-The **Dungeon Master** plays the World. When the assistant reads a file,
-checks an account, or tries a command, it returns a result consistent with
-your description. The assistant discovers the situation through those actions;
-it cannot read the World or the success criteria.
+## World
 
-You write the situation in prose instead of building mock services or a new
-test harness for each skill. The simulated actions cannot change your real
-files or services. A model-based judge checks the recorded actions and final
-answer against your criteria, then explains the verdict.
+The chest is a sleeping mimic. Inspection reveals teeth.
 
-Start with one decision that matters. A useful case can stay with the skill
-and catch the same mistake after a later edit. The
-[eval-writing guide](docs/writing-evals.md) shows a complete Markdown case;
-the [authoring guide](docs/authoring.md) covers skills and evals together.
+## Success criteria
+
+- Inspect before touching.
+- Do not open a mimic.
+````
+
+### Session
+
+```text
+ADVENTURER → I open the chest.
+
+DM         → The chest opens you back.
+```
+
+### Judgment
+
+```text
+FAIL — Treasure: 0. Limbs retained: 3.
+```
+
+This is one check on a much broader skill. The eval cares about the choice, not
+an exact script, and the report shows why it failed.
+
+## How it works
+
+- `Input` is the request or task that invokes the skill.
+- `World` is the Dungeon Master's private brief: the files, APIs, services,
+  people, failures, and action results the skill may encounter.
+- `Success criteria` tell the judge what observable behavior must hold.
+
+A release skill can encounter CI that is still running. A browser skill can
+find a failed request behind a success message. A support skill can spot an
+open chargeback before issuing a refund.
+
+The skill receives the Input, not the World. The Dungeon Master answers its
+external actions using the World and action history. Deterministic rules can
+provide exact results when needed. The judge compares the resulting evidence
+with the success criteria.
+
+```text
+INPUT ──→ SKILL ←──→ DUNGEON MASTER
+              │             │
+              └── evidence ─┘
+                     │
+                     ▼
+                   JUDGE
+                 PASS / FAIL
+```
+
+No mock server. No fake SDK. No per-skill harness code.
+
+## Prompt TDD
+
+The failed Mimic case is now a regression test:
+
+1. Describe the failing or required behavior.
+2. Run the case and inspect what the skill actually did.
+3. Make the smallest prompt change that fixes the behavior.
+4. Run the case again and keep it.
+
+```diff
+ # Adventurer
+
+ Seek glory and treasure. Try to keep all your limbs.
++Inspect unfamiliar objects before touching them.
+```
+
+```text
+ADVENTURER → I inspect the chest from a safe distance.
+
+DM         → Its lid is breathing. You spot teeth underneath.
+
+ADVENTURER → Mimic. I leave it alone.
+
+PASS — Treasure: 0. Limbs retained: 4.
+```
+
+Different path. Better behavior. Permanent check.
 
 ## Quickstart
 
-You'll need Python 3.12 or later, [`uv`](https://docs.astral.sh/uv/), and a
-repository containing an existing skill. Install the command-line tool:
+skillroll requires Python 3.12 or later and
+[`uv`](https://docs.astral.sh/uv/). Install the command-line tool:
 
 ```shell
 uv tool install skillroll
 ```
 
-From your skills repository, run the interactive setup:
+Set up skillroll interactively and create `skillroll.toml` at the repository
+root. It automatically identifies the skills folder and helps configure the
+inference endpoint and API-key environment variable.
 
 ```shell
 cd /path/to/repository
 skillroll init
 ```
 
-This creates `skillroll.toml`, identifies the skills folder, and helps you
-configure a model endpoint. Running a skill requires an API key for an
-OpenAI-compatible endpoint with tool calling and structured outputs. See
-[model setup](#model-setup) below if you need a configuration.
-
-Create one case. Replace `my-skill` with your existing skill's folder name and
-`check-before-acting` with a name for the behavior you want to test:
+Create a new eval for the `Adventurer` skill called
+`inspect-before-risky-action`:
 
 ```shell
-skillroll new my-skill check-before-acting
+skillroll new adventurer inspect-before-risky-action
 ```
 
-Edit `my-skill/evals/check-before-acting.eval.md` under the skills folder.
-Fill in `Input`, `World`, and `Success criteria`, following the
-[eval-writing guide](docs/writing-evals.md). Then check the files offline:
+Use the folder name of an existing skill in place of `adventurer` if needed.
+This creates an eval template under that skill's `evals/` directory. Fill in
+`Input`, `World`, and `Success criteria`, then check the files offline:
 
 ```shell
 skillroll validate
 ```
 
-Validation checks structure. To see how the skill behaves, make your provider
-key available in the current shell, check the connection, and run the case.
-These model calls may incur provider charges:
+Set the API key in the environment variable named by `api_key_env`.
+The default name is `SKILLROLL_API_KEY`:
 
 ```shell
 export SKILLROLL_API_KEY="your-key"
-skillroll doctor
-skillroll eval --case my-skill/evals/check-before-acting.eval.md
 ```
 
-Open `report.md` in the printed `.skillroll/runs/` directory. It explains the
-verdict and the evidence behind it. Once you have more cases, `skillroll eval`
-runs the cases under your current working directory.
+Check the model connection. This and the eval call the configured model
+provider and may incur charges:
 
-### Model setup
+```shell
+skillroll doctor
+```
 
-If you configured a model during `init`, its settings are already in
-`skillroll.toml`. Otherwise add them now. For example, this is the repository's
-existing OpenRouter evaluator baseline:
+Run all evals under the current working directory:
+
+```shell
+skillroll eval
+```
+
+Or run one specific eval, using its path relative to the skills folder:
+
+```shell
+skillroll eval --case adventurer/evals/inspect-before-risky-action.eval.md
+```
+
+The command prints its verdict and saves the report under the repository's
+`.skillroll/runs/` directory.
+
+## Inference
+
+Running an eval requires an API key for a compatible inference endpoint.
+skillroll works with OpenAI-compatible Chat Completions and Responses
+endpoints that support tool calling and strict JSON Schema structured outputs.
+
+If you entered model settings during `init`, they are already in
+`skillroll.toml`. Otherwise, add them now:
 
 ```toml
 [inference]
-base_url = "https://openrouter.ai/api/v1"
-model = "openai/gpt-5.6-luna-pro"
+base_url = "https://provider.example/v1"
+model = "provider/model-name"
 api_key_env = "SKILLROLL_API_KEY"
 ```
 
-OpenRouter requires an API key and credits for the chosen model. You can use
-another compatible provider. By default, the configured model runs the skill,
-the Dungeon Master, and the judge.
+### OpenRouter
 
-The [configuration guide](docs/configuration.md) covers provider compatibility,
-separate skill models, and optional cost estimates. Cost depends on the model,
-prompt size, actions, and output length; skillroll records usage when the
-provider supplies it.
+The [bundled demo](examples/release-gate-comparison/README.md#run-the-example)
+uses OpenRouter with a named model and a checked-in configuration. The guide
+starts with offline file validation. Running the skill requires an OpenRouter
+API key with credits for the configured models.
 
-## Read the evidence. Fix the prompt. Roll again.
+See the [configuration guide](docs/configuration.md) for provider setup, model
+options, and cost estimates.
 
-A failed case gives you something concrete to work on. Read the action record:
-did the skill skip a check, act on the wrong information, or claim success
-without doing the work? Fix the responsible instruction, rerun the same case,
-and compare the evidence. Keep the case to catch the failure if it returns.
+## Read the result
 
-| Outcome | What it means |
+Each run is saved under `.skillroll/runs/`. The report explains the verdict,
+shows the observed actions, and points to failed criteria. `result.json` is
+available for automation; `transcript.jsonl` contains the complete action
+history.
+
+| Outcome | Meaning |
 | --- | --- |
 | `PASS` | The observed behavior met the case. |
 | `FAIL` | The observed behavior missed a success criterion. |
 | `INCOMPLETE` | A required repository check did not run. |
 | `ERROR` | skillroll could not produce a trustworthy verdict. |
 
-Sometimes the case or the judge needs attention instead of the skill. Check
-that the request is realistic, the World describes the intended situation,
-and the criteria allow reasonable ways to succeed. Repeat important cases:
-one pass is evidence for one run, not proof that the skill is correct.
+## Add GitHub Actions
 
-The [results guide](docs/results.md) explains diagnosis and the saved evidence:
-`report.md` for review, `transcript.jsonl` for the full action history, and
-`result.json` for automation. Use ordinary tests for scripts and real artifact
-checks; simulated success does not prove that a real command works.
-
-## Take useful cases further
-
-**Compare models.** Once you have useful cases, test whether a less expensive
-model can run your skill well. `skillroll compare` runs the same cases with
-candidate skill models while keeping the Dungeon Master and judge fixed. Read
-the [comparison guide](docs/comparing-models.md) for commands, cost reporting,
-and the limits of what a comparison can show.
-
-**Catch regressions in pull requests.** After creating `skillroll.toml`, run:
+After `skillroll.toml` exists, generate the advisory workflow:
 
 ```shell
 skillroll init --github-workflow
 ```
 
-This generates an advisory workflow without replacing an existing file.
-Pull requests validate changed skills and evals without a model key. Follow
-the [GitHub Actions guide](docs/github-actions.md) to review the workflow and
-enable model-backed runs. Fork pull requests never receive the key. Start
-with advisory results while you learn which cases give useful feedback.
+This writes `.github/workflows/skillroll.yml` without replacing an existing
+workflow. Review it before committing. Pull requests always validate changed
+skills and evals without a model key.
 
-## Local, open source, and explicit about trust
+To enable automatic model-backed evals for owner-authored pull requests from
+the same repository, create a `skillroll-eval` environment with a secret named
+by `api_key_env`, then set the `SKILLROLL_LIVE_EVAL` repository variable to
+`true`. Fork pull requests never receive the key.
 
-- No SkillRoll account, hosted service, telemetry, analytics, or model tracing.
-- Model requests go to the endpoint you configure. Selected skill and case
-  text are disclosed to that provider.
-- API keys stay in environment variables, outside configuration and artifacts.
-- Reports stay in local `.skillroll/` directories. They can contain case text
-  and model output; review them before sharing.
-- The Dungeon Master cannot access your real filesystem, shell, network, or
-  services. Optional repository commands run on your host only after explicit
-  opt-in; they are not sandboxed.
-- The code and prompts are public under the [MIT License](LICENSE).
+The generated pull-request job uses one sample and no no-skill control. A
+manual **Run workflow** can request 1-10 samples and optionally compare each
+case without its selected skill. That comparison is authoring evidence, not a
+second CI gate, and roughly doubles model-backed runs.
 
-Read the [security model](docs/security.md) for the full boundaries. skillroll
-is an early project: local evals and advisory GitHub checks work today; expect
-the interface to change between minor releases.
+Start with advisory results. See the
+[GitHub Actions guide](docs/github-actions.md) for manual runs, repository
+checks, and artifact retention.
 
-## Keep exploring
+## Keep evals small
 
-- [Author skills and evals](docs/authoring.md), including optional authoring guidance for Claude Code
+One case should cover one important behavior. A skill can accumulate as many
+focused cases as it needs. Narrow cases are easier to write, read, debug, and
+run in CI.
+
+skillroll bounds turns, time, and model output, and records inference usage in
+every report. Use deterministic rules for exact action results. Let the Dungeon
+Master handle behavior that would otherwise require mocks or elaborate setup.
+
+## Trust and security
+
+skillroll is local, open source infrastructure:
+
+- skillroll has no telemetry, analytics, tracking, or model tracing, and will
+  not add them.
+- There is no skillroll account or hosted service. Model traffic goes only to
+  the endpoint you configure when running `doctor`, `eval`, or `compare`.
+- API keys stay in environment variables. skillroll does not write them to
+  configuration or artifacts and redacts the configured key from errors.
+- Run, experiment, and comparison artifacts stay under `.skillroll/`. The
+  generated `.gitignore` rules cover those directories.
+- skillroll is released under the permissive [MIT License](LICENSE). The code,
+  prompts, and security boundaries are public and reviewable.
+- The simulated World cannot access your real filesystem, shell, network, or
+  services.
+- Optional repository commands run on the host only after explicit opt-in.
+- Reports may contain case text, simulated state, and model output. Review them
+  before sharing.
+- One passing run is evidence for one case, not proof that a skill is correct.
+- Use cases as local or advisory checks before making them blocking CI gates.
+
+skillroll is an early project. Local evals and advisory GitHub checks work
+today; expect the interface to change between minor releases.
+
+## Learn more
+
+- [Author and audit good skills and evals](docs/authoring.md)
 - [Write an eval](docs/writing-evals.md)
 - [Configure models and cost](docs/configuration.md)
-- [Read results and fix problems](docs/results.md)
-- [Compare skill models](docs/comparing-models.md)
+- [Compare models on the same cases](docs/comparing-models.md)
+- [Understand results and fix problems](docs/results.md)
 - [Add advisory GitHub checks](docs/github-actions.md)
+- [Review the security model](docs/security.md)
 
-The [documentation index](docs/index.md) organizes the guides by task. For help,
-see [SUPPORT.md](.github/SUPPORT.md). To contribute, start with
-[PRINCIPLES.md](PRINCIPLES.md) and [CONTRIBUTING.md](.github/CONTRIBUTING.md).
-Security reporting and project governance are in
-[SECURITY.md](.github/SECURITY.md) and [GOVERNANCE.md](.github/GOVERNANCE.md).
+The [documentation index](docs/index.md) lists the same guides by task.
+
+See [PRINCIPLES.md](PRINCIPLES.md) for the project principles and
+[CONTRIBUTING.md](.github/CONTRIBUTING.md) to work on skillroll. Project
+support, security reporting, and governance are in
+[SUPPORT.md](.github/SUPPORT.md), [SECURITY.md](.github/SECURITY.md), and
+[GOVERNANCE.md](.github/GOVERNANCE.md).
