@@ -217,6 +217,41 @@ API key with credits for the configured models.
 See the [configuration guide](docs/configuration.md) for provider setup, model
 options, and cost estimates.
 
+### Estimated cost per eval
+
+As of November 15, 2026, OpenRouter lists
+[GPT-5.6 Luna Pro](https://openrouter.ai/openai/gpt-5.6-luna-pro) at $0.20
+per million input tokens and $1.20 per million output tokens on standard
+routing. These examples use that model for the skill, Dungeon Master, and judge.
+The token totals are illustrative and include a compatibility check for one
+standalone run. A batch can share that check.
+
+| Example | Total input tokens | Total output tokens | Estimated cost |
+| --- | ---: | ---: | ---: |
+| Short prompt, one action | 8K | 1K | $0.0028 |
+| Typical prompt, two actions | 20K | 3K | $0.0076 |
+| Large prompt, four actions | 60K | 8K | $0.0216 |
+
+For a measured point of reference, the [recorded release demo comparison](examples/release-gate-comparison/EVIDENCE.md#executor-comparison)
+averaged about **$0.0016 per case** with GPT-6 Luna running the skill and
+GPT-5.6 Luna Pro judging it, plus about $0.00044 in shared compatibility checks
+for the whole comparison. That estimate uses the recorded token usage across
+eight runs of four cases. Actual charges depend on the model, token usage,
+caching, and provider rates.
+
+To estimate costs in your own reports, add the rates for your models to
+`skillroll.toml`. See the [cost configuration guide](docs/configuration.md#optional-cost-estimates).
+
+```toml
+[pricing]
+currency = "USD"
+
+[pricing.models."openai/gpt-5.6-luna-pro"]
+input_per_million = 0.20
+output_per_million = 1.20
+cache_read_per_million = 0.02
+```
+
 ## Read the result
 
 Each run is saved under `.skillroll/runs/`. The report explains the verdict,
