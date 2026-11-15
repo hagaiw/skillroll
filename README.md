@@ -11,35 +11,19 @@
 </p>
 
 <p align="center">
-  <a href="examples/release-gate-comparison/README.md#run-the-example"><strong>Try the demo</strong></a> ·
-  <a href="#quickstart">Set up your own skill</a> ·
+  <a href="#quickstart"><strong>Get started</strong></a> ·
   <a href="docs/authoring.md">Author skills and evals</a> ·
   <a href="docs/writing-evals.md">Write an eval</a> ·
   <a href="docs/results.md">Understand a result</a>
 </p>
 
-skillroll is a drop-in eval harness for repositories of
-[Agent Skills](https://agentskills.io/). It turns skill decisions into readable
-regression checks.
-
-## A real eval caught a deployment attempt
-
-In a recorded SkillRoll 0.3.0 run, a release skill saw green CI for the old
-revision `old202`. The current revision was `b202`. This excerpt shows what the
-skill did in the simulated release service:
-
-```text
-get_release_state → current b202, CI succeeded for old202
-deploy_release({"commit":"b202"}) → succeeded
-```
-
-The skill's final reply began “Deployment did not proceed.” SkillRoll reported
-**FAIL** because the trace showed a deployment attempt. See the
-[recorded run and verdict](examples/release-gate-comparison/EVIDENCE.md#stale-ci-on-the-published-cli).
+Skills such as [Agent Skills](https://agentskills.io/) give an AI assistant
+reusable instructions for a job. skillroll tests the decisions the assistant
+makes with those instructions and turns them into readable regression checks.
 
 ## Example
 
-This illustrative dungeon example shows how to write a case.
+This dungeon scenario illustrates how to write a case and read the result.
 
 ### Skill
 
@@ -89,7 +73,7 @@ FAIL — Treasure: 0. Limbs retained: 3.
 This is one check on a much broader skill. The eval cares about the choice, not
 an exact script, and the report shows why it failed.
 
-## The same framework fits any skill
+## How it works
 
 - `Input` is the request or task that invokes the skill.
 - `World` is the Dungeon Master's private brief: the files, APIs, services,
@@ -170,22 +154,23 @@ Create a new eval for the `Adventurer` skill called
 skillroll new adventurer inspect-before-risky-action
 ```
 
-This creates the eval template
-`adventurer/evals/inspect-before-risky-action.eval.md` for you to edit.
-
-Then validate all evals in the repository:
+Use the folder name of an existing skill in place of `adventurer` if needed.
+This creates an eval template under that skill's `evals/` directory. Fill in
+`Input`, `World`, and `Success criteria`, then check the files offline:
 
 ```shell
 skillroll validate
 ```
 
-Make an API key available to skillroll in your current shell:
+Set the API key in the environment variable named by `api_key_env`.
+The default name is `SKILLROLL_API_KEY`:
 
 ```shell
 export SKILLROLL_API_KEY="your-key"
 ```
 
-Check the model connection:
+Check the model connection. This and the eval call the configured model
+provider and may incur charges:
 
 ```shell
 skillroll doctor
@@ -209,8 +194,8 @@ The command prints its verdict and saves the report under the repository's
 ## Inference
 
 Running an eval requires an API key for a compatible inference endpoint.
-skillroll supports OpenAI-compatible Chat Completions and Responses endpoints
-with tool calling and strict JSON Schema structured outputs.
+skillroll works with OpenAI-compatible Chat Completions and Responses
+endpoints that support tool calling and strict JSON Schema structured outputs.
 
 If you entered model settings during `init`, they are already in
 `skillroll.toml`. Otherwise, add them now:
@@ -224,62 +209,13 @@ api_key_env = "SKILLROLL_API_KEY"
 
 ### OpenRouter
 
-If you do not yet have an inference provider,
-[OpenRouter](https://openrouter.ai/) offers multiple models through one
-endpoint, with account spending controls. Model availability and free-route
-capacity vary.
+The [bundled demo](examples/release-gate-comparison/README.md#run-the-example)
+uses OpenRouter with a named model and a checked-in configuration. The guide
+starts with offline file validation. Running the skill requires an OpenRouter
+API key with credits for the configured models.
 
-The repository keeps
-[`openai/gpt-5.6-luna-pro`](https://openrouter.ai/openai/gpt-5.6-luna-pro)
-as its existing evaluator baseline. This is a reference configuration, not a
-claim that it is the cheapest or best model for every case:
-
-```toml
-[inference]
-base_url = "https://openrouter.ai/api/v1"
-model = "openai/gpt-5.6-luna-pro"
-api_key_env = "SKILLROLL_API_KEY"
-```
-
-For executor comparisons, see the
-[tested GPT-6 Luna candidate setup](docs/comparing-models.md#a-current-openrouter-candidate).
-It keeps the evaluator fixed while you assess a current lower-cost skill model.
-
-Or the free tier:
-
-```toml
-[inference]
-base_url = "https://openrouter.ai/api/v1"
-model = "openrouter/free"
-api_key_env = "SKILLROLL_API_KEY"
-```
-
-### Estimated Luna Pro cost per eval
-
-As of August 24, 2026,
-[OpenRouter lists Luna Pro](https://openrouter.ai/openai/gpt-5.6-luna-pro) at
-$0.20 per million input tokens and $1.20 per million output tokens. These
-working estimates include the compatibility check, skill run, Dungeon Master,
-and judge:
-
-| Case | Representative billed tokens | Estimated cost |
-| --- | ---: | ---: |
-| Short prompt, one action | 8K input + 1K output | about $0.003 |
-| Typical prompt, two actions | 20K input + 3K output | about $0.008 |
-| Large prompt, four actions | 60K input + 8K output | about $0.022 |
-
-Actual cost depends on prompt size, action count, output length, caching, and
-provider pricing. Batch runs share one compatibility check. Add current rates
-to `skillroll.toml` if you want reports to estimate cost from observed usage.
-
-```toml
-[pricing]
-currency = "USD"
-
-[pricing.models."openai/gpt-5.6-luna-pro"]
-input_per_million = 0.20
-output_per_million = 1.20
-```
+See the [configuration guide](docs/configuration.md) for provider setup, model
+options, and cost estimates.
 
 ## Read the result
 
@@ -294,28 +230,6 @@ history.
 | `FAIL` | The observed behavior missed a success criterion. |
 | `INCOMPLETE` | A required repository check did not run. |
 | `ERROR` | skillroll could not produce a trustworthy verdict. |
-
-## Compare models that run the skill
-
-After you have a regression case, compare candidate models on the same case
-while keeping the configured model fixed for the Dungeon Master and judge.
-Use SkillRoll 0.3.0 or later and run from your repository:
-
-```shell
-skillroll compare \
-  --executor-model provider/baseline \
-  --executor-model provider/candidate \
-  --samples 5 \
-  --case path/to/eval.md
-```
-
-The comparison makes real model calls and may incur provider charges. Open
-`report.md` under `.skillroll/comparisons/` even if an attempt fails and the
-command exits with a failure status. Results describe the selected cases and
-samples. Cost estimates require reported token usage and configured rates.
-See the [comparison guide](docs/comparing-models.md) for details or try the
-[runnable release-gate example](examples/release-gate-comparison/) with
-recorded results.
 
 ## Add GitHub Actions
 
@@ -360,12 +274,11 @@ skillroll is local, open source infrastructure:
 - skillroll has no telemetry, analytics, tracking, or model tracing, and will
   not add them.
 - There is no skillroll account or hosted service. Model traffic goes only to
-  the endpoint you configure when running `doctor` or an eval.
+  the endpoint you configure when running `doctor`, `eval`, or `compare`.
 - API keys stay in environment variables. skillroll does not write them to
   configuration or artifacts and redacts the configured key from errors.
-- Run artifacts stay under `.skillroll/runs/` and sampled experiment reports
-  under `.skillroll/experiments/`; both are ignored by the generated `.gitignore`
-  rules.
+- Run, experiment, and comparison artifacts stay under `.skillroll/`. The
+  generated `.gitignore` rules cover those directories.
 - skillroll is released under the permissive [MIT License](LICENSE). The code,
   prompts, and security boundaries are public and reviewable.
 - The simulated World cannot access your real filesystem, shell, network, or
@@ -384,7 +297,7 @@ today; expect the interface to change between minor releases.
 - [Author and audit good skills and evals](docs/authoring.md)
 - [Write an eval](docs/writing-evals.md)
 - [Configure models and cost](docs/configuration.md)
-- [Compare skill executor models](docs/comparing-models.md)
+- [Compare models on the same cases](docs/comparing-models.md)
 - [Understand results and fix problems](docs/results.md)
 - [Add advisory GitHub checks](docs/github-actions.md)
 - [Review the security model](docs/security.md)
