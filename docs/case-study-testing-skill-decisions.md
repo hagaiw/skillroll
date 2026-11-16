@@ -138,6 +138,6 @@ danger visible. A small change made the safer choice much more consistent.
 All runs used simulated actions. The repair is local, and no pull request has
 been submitted to Vercel.
 
-Next: [write an eval](writing-evals.html),
-[read the resulting evidence](results.html), or
-[add advisory GitHub checks](github-actions.html).
+Next: [write an eval](https://github.com/hagaiw/skillroll/blob/main/docs/writing-evals.md),
+[read the resulting evidence](https://github.com/hagaiw/skillroll/blob/main/docs/results.md), or
+[add advisory GitHub checks](https://github.com/hagaiw/skillroll/blob/main/docs/github-actions.md).
