@@ -104,8 +104,8 @@ def _event_text(event: WorldEvent) -> str:
     return "\n".join(details)
 
 
-def _response_format(criteria_count: int) -> dict[str, JSONValue]:
-    """Require the judge's bounded decision without echoed authored prose."""
+def _response_format() -> dict[str, JSONValue]:
+    """Require a portable decision shape; parsing enforces array limits."""
     return {
         "type": "json_schema",
         "json_schema": {
@@ -118,8 +118,6 @@ def _response_format(criteria_count: int) -> dict[str, JSONValue]:
                     "rationale": {"type": "string"},
                     "criteria": {
                         "type": "array",
-                        "minItems": criteria_count,
-                        "maxItems": criteria_count,
                         "items": {
                             "type": "object",
                             "properties": {
@@ -136,7 +134,6 @@ def _response_format(criteria_count: int) -> dict[str, JSONValue]:
                     "unmet_criteria": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "maxItems": 16,
                     },
                 },
                 "required": (
@@ -196,7 +193,7 @@ def judge_request(
             None,
             profile.limits.max_output_tokens,
             0.0,
-            response_format=_response_format(len(criteria)),
+            response_format=_response_format(),
         ),
         None,
     )

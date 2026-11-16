@@ -551,7 +551,9 @@ def test_judge_renders_only_observed_evidence_and_calls_once(tmp_path: Path) -> 
     schema = json_schema["schema"]
     assert isinstance(schema, dict)
     criteria_schema = schema["properties"]["criteria"]
-    assert criteria_schema["minItems"] == criteria_schema["maxItems"] == 1
+    assert "minItems" not in criteria_schema
+    assert "maxItems" not in criteria_schema
+    assert "maxItems" not in schema["properties"]["unmet_criteria"]
     assert set(criteria_schema["items"]["properties"]) == {"status", "evidence"}
     system = request.messages[0].content or ""
     assert "different tool spelling" in system
@@ -852,6 +854,31 @@ def test_judge_rejects_each_structured_criterion_integrity_failure(
     content: str,
 ) -> None:
     parsed, failure = _parse(content, False, ("one",))
+    assert parsed is None and failure is not None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {
+            "verdict": "FAIL",
+            "rationale": "x",
+            "criteria": [
+                {"status": "not_met", "evidence": "x"},
+                {"status": "not_met", "evidence": "x"},
+            ],
+            "unmet_criteria": ["one"],
+        },
+        {
+            "verdict": "FAIL",
+            "rationale": "x",
+            "criteria": [{"status": "not_met", "evidence": "x"}],
+            "unmet_criteria": [str(index) for index in range(17)],
+        },
+    ],
+)
+def test_judge_enforces_array_limits_after_parsing(value: object) -> None:
+    parsed, failure = _parse(json.dumps(value), False, ("one",))
     assert parsed is None and failure is not None
 
 
